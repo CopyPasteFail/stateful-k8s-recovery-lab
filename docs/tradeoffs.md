@@ -56,6 +56,8 @@ This document records the key design decisions made in `stateful-k8s-recovery-la
 
 **Alternative considered:** Velero — a Kubernetes-native backup tool. Velero is appropriate for cluster-level backups (namespaces, resources). It is not designed for application-level data backup of a file directory. Restic is the better tool when the unit of backup is a directory.
 
+**Stable host for parent snapshot selection:** Restic uses the `--host` flag to identify which previous snapshot to use as the parent for an incremental backup. Kubernetes Job pod names change on every run. Without an explicit `--host`, each run reports a different host name, so Restic cannot find a parent and falls back to reading every file (`no parent snapshot found, will read all files`). The backup CronJob passes `--host "${RESTIC_HOST}"` (default: `leveldb-app`) so Restic consistently selects the correct parent snapshot, keeping incremental transfers small. This is especially important at the 2 TB design scale.
+
 ---
 
 ## MinIO as local backup backend {#minio}

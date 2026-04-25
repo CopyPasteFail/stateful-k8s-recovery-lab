@@ -69,6 +69,7 @@ spec:
                   printf '%s\n' '' '=== leveldb-app backup ==='
                   printf 'repository : %s\n' "${RESTIC_REPOSITORY}"
                   printf 'backup path: %s\n' "{{ .Values.backup.restic.backupPath }}"
+                  printf 'restic host: %s\n' "${RESTIC_HOST}"
 
                   printf '%s\n' '' '--- init (idempotent) ---'
                   if restic cat config > /dev/null 2>&1; then
@@ -81,11 +82,12 @@ spec:
 
                   printf '%s\n' '' '--- backup ---'
                   restic backup {{ .Values.backup.restic.backupPath }} \
-                    --tag {{ .Values.backup.restic.snapshotTag }}
+                    --tag {{ .Values.backup.restic.snapshotTag }} \
+                    --host "${RESTIC_HOST}"
                   printf '[ok]   backup complete\n'
 
                   printf '%s\n' '' '--- recent snapshots ---'
-                  restic snapshots --latest 5
+                  restic snapshots --latest 5 --host "${RESTIC_HOST}"
 
                   printf '%s\n' '' '=== backup job done ==='
               env:
@@ -106,6 +108,11 @@ spec:
                     secretKeyRef:
                       name: {{ include "leveldb-app.fullname" . }}-restic
                       key: aws-secret-access-key
+                # Stable host identity for parent snapshot selection.
+                # Pod names change every run; a fixed value lets Restic find the
+                # previous snapshot and avoid scanning all files from scratch.
+                - name: RESTIC_HOST
+                  value: {{ .Values.backup.restic.host | quote }}
                 # restic tries to create /.cache which is root-owned; redirect
                 # the cache to /tmp where the non-root user can write.
                 - name: RESTIC_CACHE_DIR

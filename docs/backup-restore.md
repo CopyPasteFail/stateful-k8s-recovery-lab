@@ -73,10 +73,16 @@ Restic is an open-source backup tool with native support for S3-compatible backe
 The CronJob mounts the app PVC (the `/data/leveldb` directory) and runs:
 
 ```bash
-restic backup /backup-source/leveldb --tag leveldb-app
+restic backup /backup-source/leveldb --tag leveldb-app --host leveldb-app
 ```
 
 Tags allow filtering snapshots by source in `restic snapshots`.
+
+### Stable host identity
+
+The backup Job passes `--host "${RESTIC_HOST}"` (default: `leveldb-app`) to every `restic backup` invocation. This matters because Kubernetes assigns a new random pod name to every Job run. Without an explicit `--host`, Restic records the pod name as the snapshot host. On the next run it sees a different host name, cannot find a parent snapshot for the same dataset, and falls back to scanning every file—producing the log message `no parent snapshot found, will read all files`. For a 2 TB dataset on a six-hour cycle this is a significant performance penalty.
+
+With a fixed host name, Restic finds the previous snapshot for `leveldb-app`, computes a diff, and uploads only changed chunks. Set `backup.restic.host` in Helm values to override the default.
 
 ### Retention policy
 

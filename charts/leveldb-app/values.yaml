@@ -87,6 +87,12 @@ backup:
 
     snapshotTag: leveldb-app
 
+    # Stable host identity passed to restic backup --host.
+    # Kubernetes Job pod names change on every run, causing Restic to scan all
+    # files instead of diffing from a parent snapshot. A fixed host name lets
+    # Restic find the previous snapshot for this dataset on every run.
+    host: leveldb-app
+
   # LOCAL DEMO ONLY. MinIO S3 credentials for the Restic backend.
   # These match helm-values/minio.yaml. Replace with external secrets in production.
   s3:
