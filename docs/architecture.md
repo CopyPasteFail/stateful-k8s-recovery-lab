@@ -98,46 +98,31 @@ graph TB
 
 A minimal Go HTTP service. It exposes a key-value API backed by LevelDB. There is no query language, no authentication, and no network replication—deliberately, to keep the operational model simple.
 
-**Rationale for LevelDB:** LevelDB is an embedded key-value store with no network protocol and no daemon. It is appropriate for this reference because it forces explicit decisions about consistency, backup, and scaling that a distributed database (Cassandra, Redis Cluster) would obscure. The design decisions here generalize to any single-writer embedded store.
+LevelDB is an embedded key-value store with no network protocol and no daemon. It forces explicit decisions about consistency, backup, and scaling that a distributed database would obscure. See [tradeoffs.md — LevelDB as the storage engine](tradeoffs.md#leveldb-as-the-storage-engine).
 
-**Rationale for StatefulSet (not Deployment):** `StatefulSet` provides a stable pod identity and stable PVC binding. This means the pod always reconnects to the same volume after a restart. A `Deployment` with a `PVC` would work for a single replica, but `StatefulSet` is the idiomatic Kubernetes resource for stateful workloads and enables future per-pod sharding.
+The app runs as a `StatefulSet` for stable pod identity and stable PVC binding—the pod always reconnects to the same volume after a restart. See [tradeoffs.md — StatefulSet](tradeoffs.md#statefulset).
 
 ### Persistent storage
 
 Each `leveldb-app` pod has exactly one `PVC`. The PVC is bound to the pod's stable identity (`leveldb-app-0`) by the `StatefulSet` `volumeClaimTemplates`. The storage class is the k3d default for local use; in production, use a storage class that supports volume expansion.
 
-**Rationale for PVC-per-pod:** LevelDB holds an exclusive write lock on its data directory. Sharing one `ReadWriteMany` volume between pods would not fix this - LevelDB would still crash the second writer. PVC-per-pod reflects the actual constraint.
+LevelDB holds an exclusive write lock on its data directory. Sharing one `ReadWriteMany` volume between pods would not fix this—LevelDB would still fail the second writer. PVC-per-pod reflects the actual constraint.
 
 ### Backup (Restic + MinIO)
 
 Restic reads the LevelDB data directory and uploads an encrypted, deduplicated snapshot to a MinIO bucket. MinIO acts as a local S3-compatible backend.
 
-**Rationale for Restic:** Restic handles encryption, deduplication, and incremental snapshots natively. The backup cost of a 6-hour interval on a multi-gigabyte dataset is bounded by the change volume, not the total dataset size. The Restic repository password is stored in a Kubernetes Secret; the repository is useless without this password.
+Restic provides encryption, deduplication, and incremental snapshots. The Restic repository password is stored in a Kubernetes Secret; the repository is useless without it. See [tradeoffs.md — Restic for backup](tradeoffs.md#restic).
 
-**Rationale for 6-hour CronJob interval:** This sets a six-hour RPO target. Six hours is aggressive enough to limit data loss in most scenarios while being conservative enough to avoid backup jobs overlapping with peak write activity. The interval is configurable via Helm values.
+The CronJob runs every six hours (`concurrencyPolicy: Forbid`). For the schedule, concurrency behavior, stable host identity, and retention policy see [backup-restore.md — Backup design](backup-restore.md#backup-design). For the design rationale see [tradeoffs.md — CronJob for scheduled backups](tradeoffs.md#cronjob).
 
-**Rationale for `concurrencyPolicy: Forbid`:** Restic uses repository-level locking, so two concurrent Restic processes will contend on that lock — one will fail or stall.
-Beyond the lock, overlapping Jobs create compounding problems: confusing backup status (which snapshot is authoritative?), extra I/O pressure on the PVC, potential PVC or snapshot contention, and doubled object-store bandwidth at the same time. `concurrencyPolicy: Forbid` keeps backup execution predictable: one Job runs, completes, and either succeeds or fails cleanly.
-If a Job takes longer than the schedule interval (e.g., the first backup of a large dataset), the next scheduled run is simply skipped rather than stacked on top of the in-progress one.
-
-**Consistency boundary (local POC vs. production):**
-
-In the **local POC**, Restic reads the live-mounted LevelDB directory directly. LevelDB writes are not paused during the backup. For a development demo with small datasets, the risk is acceptable becuase catching a torn write is low and the purpose is to exercise the operational workflow.
-
-In **production**, do not back up a live LevelDB directory for datasets where consistency matters. The recommended approach:
-
-1. Use LVM to snapshot the underlying logical volume (`lvcreate --snapshot`)
-2. Mount the snapshot read-only
-3. Run Restic against the snapshot mount
-4. Unmount and delete the snapshot after Restic completes
-
-LVM snapshots are copy-on-write and near-instantaneous. The production backup Job spec should include these steps.
+In the local POC, Restic reads the live-mounted LevelDB directory. Production should use LVM or CSI volume snapshots for a crash-consistent source. See [backup-restore.md — Consistency boundary](backup-restore.md#consistency-boundary) and [tradeoffs.md — Backup consistency](tradeoffs.md#consistency).
 
 ### MinIO
 
-MinIO runs as a Helm-deployed service inside the cluster. For local POC, data persists only as long as the MinIO PVC exists. For production, MinIO should be replaced with or backed by durable external object storage (AWS S3, GCS, Azure Blob).
+MinIO runs as a Helm-deployed service inside the cluster. For local POC, data persists only as long as the MinIO PVC exists.
 
-**Rationale for MinIO in the local POC:** For the POC, the important part is proving the backup and restore flow end to end, not proving a specific cloud provider integration. MinIO gives us a local S3-compatible target, so the same Restic workflow can be demonstrated without cloud credentials.
+For the POC, MinIO is enough because the goal is to prove the backup and restore workflow end to end with an S3-compatible target, without requiring cloud credentials or network access. Production should use durable external object storage. See [tradeoffs.md — MinIO as local backup backend](tradeoffs.md#minio).
 
 ### Observability
 
@@ -146,7 +131,7 @@ MinIO runs as a Helm-deployed service inside the cluster. For local POC, data pe
 - **Alertmanager** routes Prometheus alerts. In local use, alerts are visible in the Alertmanager UI. In production, configure routing to PagerDuty, Opsgenie, or a webhook.
 - **Loki** collects logs from the app pod and backup/restore Jobs. Grafana queries Loki for log correlation.
 
-**Rationale for including full observability in a POC:** Backup and restore workflows are high-stakes. The decision to use Alertmanager alerts for backup failures and CronJob suspension is deliberate — operators should not rely on manual checking of Job status. Observability is not a later stage; it is part of the design.
+Backup and restore workflows are high-stakes. Operators should not rely on manual Job status checks. See [observability.md](observability.md) for metrics, alert rules, dashboards, and Loki queries.
 
 ---
 
@@ -161,11 +146,7 @@ LevelDB does not support concurrent writers. The following scaling options are s
 | Tenant partitioning | Each tenant gets its own StatefulSet+PVC | Multi-tenant use case |
 | Read replicas | Copy-on-write snapshot served by a second pod | Only if the application explicitly supports quiescent snapshots |
 
-**Do not use HPA with `replicas > 1` on a single LevelDB dataset.** LevelDB is embedded local storage with a single-writer model. A second writer will normally fail to acquire the database lock, and bypassing that protection can risk corruption.
-
-The `StatefulSet` is intentionally fixed at `replicas: 1`, and the Helm chart does not expose a `replicaCount` value for the write path. This protects the normal Helm workflow from accidentally creating multiple writers for one dataset.
-
-This is a chart-level guardrail, not a cluster-wide policy. A cluster administrator could still scale the StatefulSet manually with `kubectl`. In production, enforce this with an admission policy such as Kyverno, Gatekeeper, or Kubernetes `ValidatingAdmissionPolicy` if the invariant must be protected at the cluster level.
+Do not use HPA to scale this StatefulSet above one replica. LevelDB is single-writer; a second writer pod would contend on the database lock and may fail or risk corruption. The Helm chart intentionally does not expose a replica count for the write path. This is a chart-level guardrail only; production should enforce the invariant with an admission policy if needed. See [tradeoffs.md — Single writer per LevelDB dataset](tradeoffs.md#leveldb-scaling).
 
 ---
 
@@ -221,11 +202,11 @@ Operator: make restore
 
 ## RPO and RTO
 
-**RPO (Recovery Point Objective):** Six hours. This is the maximum age of the most recent successful Restic snapshot. If the system is running correctly, restoring the latest snapshot loses at most six hours of writes.
+The system targets a **six-hour RPO**. The CronJob fires every six hours; the `LevelDBBackupNotRunRecently` alert fires after eight hours with no successful backup.
 
-**RTO (Recovery Time Objective):** Not bounded by this design. Restoring a 2 TB dataset from MinIO depends on I/O throughput. At 200 MB/s (a reasonable SSD read rate), restoring 2 TB takes approximately 3 hours. Network transfer from remote object storage adds to this. Plan and test RTO separately for each production deployment.
+RTO is not bounded by this design—it depends on dataset size, PVC write speed, and network throughput. Test and document RTO separately for each production deployment.
 
-The RPO target is enforced by the CronJob schedule and by the `LevelDBBackupNotRunRecently` Prometheus alert (fires if no successful backup in 8 hours).
+See [backup-restore.md — RPO and RTO](backup-restore.md#rpo-and-rto) for the full discussion.
 
 ---
 
