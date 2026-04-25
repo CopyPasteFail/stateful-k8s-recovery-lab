@@ -1,413 +1,276 @@
-# HUMAN.md — Operator Guide
+# HUMAN.md - Operator Demo Guide
 
-This document is the authoritative reference for a human operator managing this system. It covers day-to-day operations, incident response, recovery procedures, and maintenance tasks.
+This guide is for a human operator who wants to bring the system up, prove that it works, inspect the moving parts, and cleanly remove the local cluster afterward.
 
-For architecture and design decisions see [docs/architecture.md](docs/architecture.md).
-For backup and restore procedures see [docs/backup-restore.md](docs/backup-restore.md).
-
----
-
-## Table of contents
-
-1. [Quick demo](#quick-demo)
-2. [Environment setup](#environment-setup)
-3. [Cluster lifecycle](#cluster-lifecycle)
-4. [MinIO deployment](#minio-deployment)
-5. [Application operations](#application-operations)
-6. [Backup operations](#backup-operations)
-7. [Restore procedure](#restore-procedure)
-8. [Observability](#observability)
-9. [Maintenance windows](#maintenance-windows)
-10. [Incident response](#incident-response)
-11. [Secrets management](#secrets-management)
-12. [Known limitations](#known-limitations)
+For deeper detail, see:
+- [docs/architecture.md](docs/architecture.md)
+- [docs/backup-restore.md](docs/backup-restore.md)
+- [docs/observability.md](docs/observability.md)
+- [docs/tradeoffs.md](docs/tradeoffs.md)
 
 ---
 
-## Environment setup
+## What This Guide Is For
 
+Use this repository when you want a realistic walkthrough of a stateful Kubernetes app with backup, restore, and observability wired together.
+
+The fastest complete path is `make demo-full`. It brings up the cluster, MinIO, the app, scheduled backups, Prometheus, Grafana, Loki, and the app monitoring integration.
+
+If you want the shorter path, use `make demo`. It covers the core app, MinIO, and backups, but skips the observability stack.
+
+The rest of this file explains what to run, what healthy looks like, and what each part is doing.
+
+---
+
+## Quick Setup and Teardown Flow
+
+### Prequisites Verification and Installation
 **Required platform:** Linux. The scripts are written for bash on Linux. They are not tested on macOS or native Windows.
 > The repo wast tested on WSL2 Ubuntu 22.04
 
-**Check your environment:**
+```bash
+# Clone the repository and enter it.
+git clone https://github.com/CopyPasteFail/stateful-k8s-recovery-lab.git
+cd stateful-k8s-recovery-lab
+
+# Check prerequisites first. Install only what is missing.
+if ! make check-prereqs; then
+  make install-prereqs
+  make check-prereqs
+fi
+```
+
+If Docker itself is missing, install it separately and rerun the check.
+```bash
+make install-docker
+```
+
+### Run the Full Demo Flow
 
 ```bash
-make check-prereqs
-```
+# Run the full demo. This includes the observability stack.
+make demo-full
 
-This runs `scripts/check-prereqs.sh`, which verifies:
-- Docker Engine is installed and the daemon is running
-- `docker` is executable by the current user without `sudo`
-- `k3d` is installed
-- `kubectl` is installed and on PATH
-- `helm` is installed
-
-**Install missing tools:**
-
-```bash
-make install-prereqs      # installs kubectl, helm, k3d, restic, shellcheck, and other tools
-make install-docker       # installs Docker Engine (requires sudo)
-```
-
-`install-prereqs.sh` also installs `make` itself via apt. If `make` is not yet present on a fresh system, bootstrap it first:
-
-```bash
-sudo apt-get update && sudo apt-get install -y make
-make install-prereqs
-```
-
-Or skip `make` entirely and run the script directly:
-
-```bash
-bash scripts/install-prereqs.sh
-```
-
-`install-docker.sh` follows the official Docker Engine install path for Ubuntu. After it runs you must log out and back in (or `newgrp docker`) for group membership to take effect.
-
----
-
-## Quick demo
-
-The fastest way to bring up the full environment and verify everything works:
-
-```bash
-make demo        # core workflow: app + MinIO + backup (~3-5 min)
-make demo-full   # full platform: adds Prometheus, Grafana, Loki (~10-15 min first run)
-```
-
-Both commands are idempotent — safe to run on an already-running cluster.
-
-**Why restore is not part of the demo:** Restore is a disruptive recovery operation. It scales the application to zero replicas and overwrites PVC data. It is not safe to run automatically as part of a demo sequence. To validate the restore path explicitly after the demo:
-
-```bash
-make backup            # ensure a recent snapshot exists
-make restore           # guided restore: suspend CronJob → scale down → restore → verify → scale up
-# or for a specific snapshot:
-SNAPSHOT=abc12345 make restore
-```
-
----
-
-## Local app development
-
-Run and test the Go application without a Kubernetes cluster:
-
-```bash
-make test-app        # run Go unit tests (app/internal/store and app/internal/httpapi)
-make run-app-local   # start the app on http://localhost:8080, data in .local/leveldb
-```
-
-While running locally:
-
-```bash
-curl -X PUT  http://localhost:8080/kv/mykey -d "myvalue"
-curl         http://localhost:8080/kv/mykey
-curl -X DELETE http://localhost:8080/kv/mykey
-curl         http://localhost:8080/healthz
-curl         http://localhost:8080/readyz
-curl         http://localhost:8080/metrics
-```
-
-Override defaults with environment variables:
-
-```bash
-DATA_DIR=/tmp/mydb PORT=9090 make run-app-local
-```
-
-The `.local/` directory (default data location) is gitignored.
-
----
-
-## Cluster lifecycle
-
-**Create the cluster:**
-
-```bash
-make bootstrap
-```
-
-This runs `scripts/bootstrap.sh`, which:
-1. Creates a k3d cluster named `stateful-recovery` with one server node
-2. Creates the `leveldb-system`, `minio-system`, and `observability` namespaces
-3. Waits for all nodes to reach Ready state
-
-The cluster persists until you explicitly destroy it.
-
-**Destroy the cluster and all data:**
-
-```bash
-make destroy
-```
-
-This runs `scripts/destroy.sh`. All cluster resources including PVCs are deleted. MinIO data inside the cluster is also deleted. This is irreversible for any data not already backed up externally.
-
----
-
-## MinIO deployment
-
-MinIO is the S3-compatible object store used as the Restic backup backend. It runs inside the cluster in the `minio-system` namespace and is not exposed externally.
-
-**Deploy MinIO:**
-
-```bash
-make deploy-minio
-```
-
-This runs `scripts/deploy-minio.sh`, which:
-1. Adds/updates the public MinIO Helm repo (`https://charts.min.io/`)
-2. Installs or upgrades the `minio` Helm release into `minio-system`
-3. Waits for the StatefulSet rollout to complete
-4. Verifies the `restic` bucket exists (provisioned by a chart hook Job)
-
-Safe to rerun: `helm upgrade --install` is idempotent. The bucket provisioning Job uses `mc mb --ignore-existing`.
-
-The MinIO client image used for bucket verification is pinned by default and can be overridden:
-
-```bash
-MINIO_MC_IMAGE=minio/mc:RELEASE.2025-08-13T08-35-41Z make deploy-minio
-```
-
-**Access the MinIO UI or API locally:**
-
-```bash
-make port-forward TARGET=minio-api      # MinIO S3 API  -> http://localhost:9000
-make port-forward TARGET=minio-console  # MinIO Console -> http://localhost:9001
-```
-
-**Local demo credentials** (defined in `helm-values/minio.yaml`):
-
-```
-User:     minioadmin
-Password: minioadmin
-```
-
-These are local-demo-only credentials. Do not reuse them outside this cluster. See [Secrets management](#secrets-management) for the production path.
-
----
-
-## Application operations
-
-**Deploy the application:**
-
-```bash
-make deploy                  # core app only — works on a fresh cluster
-MONITORING=1 make deploy     # also creates ServiceMonitor, PrometheusRule, and Grafana dashboard
-                             # requires: make deploy-observability first
-```
-
-Deploys the `leveldb-app` Helm chart to the `leveldb-system` namespace. This creates:
-- A `StatefulSet` with one replica
-- A `PersistentVolumeClaim` of configurable size (default: 1Gi for local POC)
-- A `Service` for in-cluster access
-- A `ServiceAccount` with least-privilege RBAC
-- A backup `CronJob` and associated `Secret`
-- When `MONITORING=1`: a `ServiceMonitor`, `PrometheusRule`, and dashboard `ConfigMap`
-
-Monitoring resources are disabled by default so `make deploy` works on any cluster, including a fresh one without `kube-prometheus-stack` installed. The `monitoring.coreos.com` CRDs (ServiceMonitor, PrometheusRule) are only required when `MONITORING=1` is set.
-
-**Check status:**
-
-```bash
+# Show the cluster and workload state after the demo finishes.
 make status
-```
 
-Prints:
-- k3d cluster state
-- StatefulSet rollout status
-- PVC status and bound volume
-- Current backup CronJob status and last Job result
-- Recent Events in the `leveldb-system` namespace
-
-**Write sample data:**
-
-```bash
-make seed-data
-```
-
-Writes a set of known key-value pairs. Used to establish a baseline before testing backup and restore.
-
-**Run smoke tests:**
-
-```bash
+# Prove the app endpoints and key-value round trip still work.
 make smoke-test
-```
 
-Verifies:
-- The app pod is Running and Ready
-- `GET /healthz` returns 200
-- `GET /readyz` returns 200
-- A PUT/GET/DELETE round trip succeeds
-- Metrics are reachable at `GET /metrics`
-
-**Access the application locally:**
-
-```bash
-make port-forward TARGET=app            # App API      -> http://localhost:8080
-make port-forward TARGET=minio-api      # MinIO S3 API -> http://localhost:9000
-make port-forward TARGET=minio-console  # MinIO UI     -> http://localhost:9001
-make port-forward                       # print all available targets
-```
-
----
-
-## Backup operations
-
-**Trigger a manual backup:**
-
-```bash
-make backup
-```
-
-Creates a one-off Kubernetes `Job` from the CronJob spec (`leveldb-app-backup`). The Job mounts the app PVC read-only at `/backup-source`, initializes the Restic repository if it does not exist, runs `restic backup /backup-source/leveldb`, and prints the five most recent snapshots on completion.
-
-**Local demo note:** the CronJob backs up the live data directory. For production, back up from an LVM or CSI snapshot. See [docs/backup-restore.md](docs/backup-restore.md#consistency-boundary).
-
-**Credentials:** Restic password and MinIO credentials are stored in the Kubernetes Secret `leveldb-app-restic` (created by the Helm chart from `helm-values/minio.yaml` values). These are local-demo-only. Do not reuse them in production.
-
-Concurrency: if a backup `Job` is already running, `make backup` exits with a warning rather than create a second Job. Override with `FORCE=1 make backup`. This matches the CronJob's `concurrencyPolicy: Forbid`.
-
-**Check backup status:**
-
-```bash
+# Show backup state and the latest Restic snapshot output.
 make backup-status
 ```
 
-Prints the status and logs of the most recent backup `Job`.
-
-**Suspend scheduled backups:**
+### (Optional) Inspect the UI
 
 ```bash
-make suspend-backups
+make port-forward TARGET=grafana
+make port-forward TARGET=prometheus
+make port-forward TARGET=alertmanager
+make port-forward TARGET=minio-console
+make port-forward TARGET=app
 ```
 
-Sets `spec.suspend: true` on the `CronJob`. Use this before maintenance windows or before starting a restore. The CronJob will not fire new Jobs while suspended, but any running Job completes.
+### Restore a Backup
 
-**Resume scheduled backups:**
-
-```bash
-make resume-backups
-```
-
-Sets `spec.suspend: false`. Always run this after maintenance is complete. A Grafana alert fires if the CronJob remains suspended beyond its expected schedule window.
-
----
-
-## Restore procedure
-
-The restore workflow is documented in full in [docs/backup-restore.md](docs/backup-restore.md). The short form:
+Restore is intentionally not part of the full demo flow.
 
 ```bash
 make restore
 ```
 
-`scripts/restore.sh` performs the following steps in order:
-1. Suspend the backup CronJob
-2. Block until any in-progress backup Job completes or fails
-3. Scale the `leveldb-app` StatefulSet to 0 replicas
-4. Run a one-off restore Job that mounts the PVC and applies the selected Restic snapshot
-5. Run verification checks against the restored data
-6. On success: scale the StatefulSet back to 1, resume the CronJob
-7. On failure: leave backups suspended, leave replicas at 0, print recovery instructions
-
-**Selecting a snapshot:**
-
-By default `make restore` restores the latest Restic snapshot. To restore to a specific snapshot:
+### Clean Up
 
 ```bash
-SNAPSHOT=abc12345 make restore
+make destroy FORCE=1
 ```
 
-**What to do if restore fails:**
-
-Do not scale the StatefulSet back up manually until you understand the cause. The data on the PVC may be in an inconsistent state. See [docs/backup-restore.md](docs/backup-restore.md#restore-failure-recovery).
+## What Full Demo Does
+- boots the local k3d cluster named `stateful-recovery`
+- creates the `leveldb-system`, `minio-system`, and `observability` namespaces
+- deploys MinIO
+- deploys the app
+- deploys Prometheus, Grafana, Alertmanager, Loki, and Promtail
+- seeds sample data
+- runs a backup
+- runs the smoke test
+- prints backup status and cluster status
 
 ---
 
-## Observability
+## What To Verify After The Run
 
-**Deploy the observability stack:**
+After `make demo-full`, `make status` should show:
+- k3d cluster `stateful-recovery`
+- namespace `leveldb-system`
+- pod `leveldb-app-0` in `Running` and `Ready`
+- MinIO pod in `Running`
+- observability pods in `Running`
+- backup CronJob present
+- `ServiceMonitor` present
+- `PrometheusRule` present
 
-```bash
-make deploy-observability   # Prometheus, Grafana, Alertmanager, Loki, Promtail
-```
+`make smoke-test` should prove:
+- `GET /healthz` returns 200
+- `GET /readyz` returns 200
+- `GET /metrics` is reachable
+- `PUT /kv/{key}`, `GET /kv/{key}`, and `DELETE /kv/{key}` work as a round trip
 
-**Open dashboards (one target at a time — each runs in the foreground):**
+`make backup-status` should show:
+- the backup CronJob
+- a recent backup Job
+- Restic snapshot output
 
-```bash
-make port-forward TARGET=grafana        # http://localhost:3000  (admin / admin)
-make port-forward TARGET=prometheus     # http://localhost:9090
-make port-forward TARGET=alertmanager   # http://localhost:9093
-make port-forward                       # print all available targets
-```
+Grafana should show:
+- app request rate and latency
+- readiness
+- LevelDB errors
+- backup-related panels if they are present in the dashboard
 
-**Tail logs:**
+Prometheus should have the app metrics:
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `leveldb_errors_total`
+- `app_ready`
 
-```bash
-make logs
-```
-
-Streams structured logs from the app pod and recent backup/restore Job pods.
-
-**Key dashboards** (see [docs/observability.md](docs/observability.md) for full details):
-- `LevelDB App Overview` — HTTP request rate, latency (p50/p95/p99), error rate, app readiness, LevelDB errors, backup job status
-
-**Key alerts:**
-- `LevelDBAppDown` — Prometheus cannot scrape the app endpoint for 2 minutes (critical)
-- `LevelDBAppNotReady` — `/readyz` failing for 2 minutes; LevelDB may have failed to open (warning)
-- `LevelDBHighErrorRate` — continuous LevelDB operation errors for 5 minutes (warning)
-- `LevelDBBackupJobFailed` — a backup Job recorded a failure in its Kubernetes status (critical)
-- `LevelDBBackupNotRunRecently` — no successful backup in the last 8 hours (warning)
-
----
-
-## Maintenance windows
-
-**Recommended procedure for maintenance that requires app downtime:**
-
-1. `make suspend-backups` — prevent backup Jobs from firing during maintenance
-2. Perform maintenance (upgrade, migration, etc.)
-3. `make smoke-test` — verify the app is functional
-4. `make backup` — take an immediate post-maintenance backup
-5. `make resume-backups`
+MinIO Console should show the `restic` bucket.
 
 ---
 
-## Incident response
+## Useful Local Access Points
 
-**App pod is CrashLoopBackOff:**
+Run port-forwarding one target at a time in a separate terminal.
 
-```bash
-make status              # check Events and pod state
-make logs                # check recent logs
-kubectl -n leveldb-system describe pod leveldb-app-0
-```
+| Component | Command | Local URL |
+|---|---|---|
+| Grafana | `make port-forward TARGET=grafana` | `http://localhost:3000` |
+| Prometheus | `make port-forward TARGET=prometheus` | `http://localhost:9090` |
+| Alertmanager | `make port-forward TARGET=alertmanager` | `http://localhost:9093` |
+| MinIO Console | `make port-forward TARGET=minio-console` | `http://localhost:9001` |
+| App API | `make port-forward TARGET=app` | `http://localhost:8080` |
 
-Common causes: PVC not bound, LevelDB lock file left from previous crash, OOM kill.
-
-**No backup for > 6 hours:**
-
-Check `make backup-status`. If the last Job failed, inspect its logs. If the CronJob is suspended, run `make resume-backups` if maintenance is complete.
-
-**PVC full:**
-
-The app and any running backup Job will start failing. Do not delete data blindly. Expand the PVC if the storage class supports it, or follow the migration procedure in [docs/migration.md](docs/migration.md).
-
-**Need to recover from a failed restore:**
-
-See [docs/backup-restore.md](docs/backup-restore.md#restore-failure-recovery).
+What to look for:
+- Grafana should show the app overview dashboard with request rate, latency, readiness, and backup signals.
+- Prometheus should be scraping the app service and exposing the metrics listed above.
+- Alertmanager should show the local alerting surface, even though this demo does not forward alerts externally.
+- MinIO Console should show the backup bucket and recent activity.
+- The app API should respond to the health, readiness, metrics, and key-value endpoints.
 
 ---
 
-## Secrets management
+## What Each Part Does
 
-**Local POC:** credentials (MinIO access key, Restic repository password, Grafana admin password) are stored in Kubernetes `Secrets`. These are populated by the deploy scripts using values in a local `.env` file that is gitignored.
+### Cluster Lifecycle
 
-**Production:** do not use Kubernetes `Secrets` with plaintext values in production. The recommended path is an external secrets operator (e.g., External Secrets Operator) backed by a cloud KMS or secrets manager (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault). See [docs/tradeoffs.md](docs/tradeoffs.md#secrets) for rationale.
+The cluster is the local Kubernetes runtime for the whole demo. The main flow already created it with `make demo-full`, which also set up the namespaces used by the app, MinIO, and observability.
+
+When it is healthy, `make status` shows the `stateful-recovery` cluster, the expected namespaces, and the running pods that belong to them.
+
+This cluster is disposable. It is meant for repeated local runs, not for long-lived state.
+
+Read more in [docs/architecture.md](docs/architecture.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
+
+### MinIO Deployment
+
+MinIO is the in-cluster object store used by Restic for backup storage in the local demo.
+
+The main flow already deployed it. When it is healthy, the MinIO pod is running and the Console shows the `restic` bucket.
+
+Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
+
+### Application Operations
+
+The app is a single-writer LevelDB service exposed through a Kubernetes `StatefulSet`.
+
+The main demo flow deployes it and seeds sample data.
+When it is healthy, `leveldb-app-0` is running and ready, the health and readiness probes pass, and the metrics endpoint exposes the application counters and histograms.
+
+The key caveat is that LevelDB supports one writer per dataset. Do not scale the write path horizontally and expect it to behave like a shared database.
+
+Read more in [docs/architecture.md](docs/architecture.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
+
+### Backup Operations
+
+Backups are managed by a Kubernetes `CronJob` that runs Restic against the app PVC.
+
+The main demo flow triggers a backup and prints the current status.
+A healthy setup has the CronJob present, a recent Job in the namespace, and snapshots in the Restic repository.
+
+The local demo backs up the live PVC. That is acceptable for a controlled demo, but it is not the production consistency boundary.
+
+Read more in [docs/backup-restore.md](docs/backup-restore.md).
+
+### Observability
+
+The observability stack is Prometheus, Grafana, Alertmanager, Loki, and Promtail.
+
+When it is healthy, Prometheus scrapes the app, Grafana has the app overview dashboard, and Loki receives pod logs.
+
+Read more in [docs/observability.md](docs/observability.md).
+
+### Restore Procedure
+
+Restore is intentionally not part of the main demo. It is disruptive because it suspends scheduled backups, scales the app down to zero, and rewrites the PVC contents before the app starts again.
+
+> It's also possible to restore a specific snapshot instead of the latest one, by running `SNAPSHOT=<id> make restore`
+
+A successful restore brings the app back up and resumes backups.
+
+A failed restore leaves the app stopped and backups suspended until an operator inspects the state and decides the next step.
+
+Read the full procedure in [docs/backup-restore.md](docs/backup-restore.md).
+
+### Maintenance Windows
+
+Scheduled backups can be suspended during maintenance that would interfere with the data path, such as restore work or storage changes.
+
+The main demo does not need this because it follows the normal happy path. Use suspension only when the work itself makes scheduled backups unsafe or misleading.
+
+The important operational rule is to resume backups after the maintenance window closes.
+
+Read more in [docs/backup-restore.md](docs/backup-restore.md).
+
+### Incident Response
+
+Start with `make status`. If you need logs, use `make logs`. If the problem is backup-related, use `make backup-status`.
+
+Common situations:
+- If the app is not ready, check whether the pod is running, whether LevelDB opened cleanly, and whether the PVC is attached and writable.
+- If a backup failed, inspect the most recent Job and its logs before retrying anything.
+- If a restore failed, leave the app stopped until you understand whether the PVC contents are safe to use.
+- If MinIO is unavailable, backups cannot complete because Restic has no object store target.
+- If observability pods are not ready, the app may still be working, but you will lose the monitoring and dashboard view until those pods recover.
+
+The main idea is to identify whether the problem is with the app, the backup path, the restore path, the object store, or the observability stack, then inspect only the relevant layer.
+
+Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/observability.md](docs/observability.md).
+
+### Secrets Management
+
+The local demo uses intentionally simple credentials. They are good enough for a disposable local cluster and should not be treated as production secrets.
+
+In this repo, the local demo credentials cover MinIO and the Restic repository secret. They are populated at runtime and not meant to be reused elsewhere.
+
+The production path is different: use External Secrets or a similar secret manager integration, cloud-managed object storage, and cloud IAM instead of static local credentials.
+
+Read more in [docs/tradeoffs.md](docs/tradeoffs.md).
+
+### Known Limitations
+
+- The local proof-of-concept backs up a live PVC. In production, use LVM or CSI snapshots as the consistency boundary.
+- The in-cluster MinIO deployment is local-demo storage, not durable production object storage.
+- The system is designed with a 2 TB production scale in mind, but it does not allocate that size locally.
+- The recovery point objective is six hours. The recovery time objective depends on restore throughput and the size of the dataset.
+- LevelDB is a single-writer store. Do not treat it like a horizontally writable replicated database.
+- Terraform is not part of the local demo flow.
+
+Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
 
 ---
 
-## Known limitations
+## Deeper Docs
 
-- **LevelDB is single-writer.** Running more than one writer against the same LevelDB directory is unsupported. A second writer will normally fail to acquire the database lock, and bypassing that protection can risk data corruption. The StatefulSet is configured with `replicas: 1`. Do not increase this for writes. See [docs/tradeoffs.md](docs/tradeoffs.md#leveldb-scaling) for safe scaling models.
-- **Local POC backup consistency.** The CronJob backs up the live-mounted `/data/leveldb` directory. In the local demo this is acceptable. In production, use LVM snapshots to establish a crash-consistent point before Restic reads the data. See [docs/backup-restore.md](docs/backup-restore.md#consistency).
-- **k3d is for local use only.** k3d runs Kubernetes in Docker. It is not a production cluster. Use it to exercise the workflow and learn the operational model.
+- [docs/architecture.md](docs/architecture.md) for the component layout and data flow
+- [docs/backup-restore.md](docs/backup-restore.md) for backup, restore, and failure handling
+- [docs/observability.md](docs/observability.md) for dashboards, alerts, and logs
+- [docs/tradeoffs.md](docs/tradeoffs.md) for the design decisions behind the implementation
