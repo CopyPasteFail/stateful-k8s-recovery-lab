@@ -1,0 +1,6 @@
+apiVersion: v2
+name: leveldb-app
+description: Go HTTP key-value service backed by LevelDB, deployed as a StatefulSet with a persistent volume.
+type: application
+version: "0.1.0"
+appVersion: "0.1.0"

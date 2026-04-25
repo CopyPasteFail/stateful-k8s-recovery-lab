@@ -1,0 +1,17 @@
+# Local runtime data
+.local/
+
+# Go build output
+app/leveldb-app
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+*.tmp

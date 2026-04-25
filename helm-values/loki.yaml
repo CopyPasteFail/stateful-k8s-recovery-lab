@@ -1,0 +1,62 @@
+# Loki Helm values — local k3d demo
+#
+# Deploys Loki in SingleBinary mode (one pod, filesystem storage).
+# Suitable for local development; not for production use.
+#
+# For production: use SimpleScalable or Distributed mode, object storage
+# (S3/GCS), replication, and appropriate retention policies.
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  limits_config:
+    # Keep 48 hours of logs for local demo.
+    retention_period: 48h
+    ingestion_rate_mb: 4
+    ingestion_burst_size_mb: 6
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  persistence:
+    size: 2Gi
+
+# Disable multi-component replicas — not used in SingleBinary mode.
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# Disable the bundled MinIO — we use in-cluster MinIO for backups only.
+minio:
+  enabled: false
+
+# No ingress; access via port-forward or Grafana data source.
+gateway:
+  enabled: false

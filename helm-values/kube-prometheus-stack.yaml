@@ -1,0 +1,150 @@
+# kube-prometheus-stack Helm values — local k3d demo
+#
+# Installs Prometheus, Grafana, and Alertmanager via the
+# prometheus-community/kube-prometheus-stack chart.
+#
+# Resource requests are intentionally modest for local k3d use.
+# For production: tune retention, storage, resource limits, and
+# configure external secrets for Grafana credentials.
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+
+  # LOCAL DEMO ONLY. Change these credentials before exposing Grafana externally.
+  adminUser: admin
+  adminPassword: "admin"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # Sidecar watches all namespaces for ConfigMaps labelled grafana_dashboard=1
+  # and loads them automatically into Grafana.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+
+  # Persist Grafana state (dashboard edits, user sessions) across pod restarts.
+  persistence:
+    enabled: false   # disabled for local demo — dashboards are provisioned from ConfigMaps
+
+  # No ingress; use: make port-forward TARGET=grafana
+  ingress:
+    enabled: false
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    # Discover ServiceMonitors and PrometheusRules from ALL namespaces,
+    # regardless of the release label. Required to scrape leveldb-system.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+
+    # Retain 24 hours of data for local demo; increase for production.
+    retention: 24h
+    retentionSize: ""
+
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+    # Local storage only; no remote write for demo.
+    storageSpec: {}
+
+# ── Alertmanager ──────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  # Default config routes all alerts to a null receiver so the stack starts
+  # cleanly. Wire up a real receiver (Slack, PagerDuty) for production.
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'null'
+    receivers:
+      - name: 'null'
+    inhibit_rules:
+      - source_matchers:
+          - severity = critical
+        target_matchers:
+          - severity = warning
+        equal: ['alertname', 'namespace']
+
+# ── Prometheus Operator ───────────────────────────────────────────────────────
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# ── kube-state-metrics ────────────────────────────────────────────────────────
+# Provides kube_job_status_failed and other Kubernetes object metrics used in
+# the leveldb-app PrometheusRules.
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# ── node-exporter ─────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# ── Default rules ─────────────────────────────────────────────────────────────
+# Keep the built-in Kubernetes recording rules and alerts.
+defaultRules:
+  create: true

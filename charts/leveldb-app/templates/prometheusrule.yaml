@@ -1,0 +1,106 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "leveldb-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "leveldb-app.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: leveldb-app
+      # Evaluate every 60s — coarser than the default 30s to reduce CPU load
+      # on the local demo Prometheus.
+      interval: 60s
+      rules:
+
+        # ── Application availability ────────────────────────────────────────
+
+        - alert: LevelDBAppDown
+          # 'up' is set to 0 by Prometheus when a scrape target is unreachable.
+          expr: up{job="{{ include "leveldb-app.fullname" . }}"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "leveldb-app scrape target is down"
+            description: >-
+              Prometheus cannot reach the leveldb-app metrics endpoint.
+              The pod may be crashed, pending, or evicted.
+              Check: kubectl get pods -n {{ .Release.Namespace }}
+
+        - alert: LevelDBAppNotReady
+          # app_ready is a Gauge exported by the app: 1 when /readyz returns 200.
+          expr: app_ready{job="{{ include "leveldb-app.fullname" . }}"} == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "leveldb-app /readyz is failing"
+            description: >-
+              The app_ready gauge has been 0 for 2 minutes.
+              The LevelDB database may have failed to open or reopen.
+              Check: kubectl logs -n {{ .Release.Namespace }} leveldb-app-0
+
+        # ── Storage errors ──────────────────────────────────────────────────
+
+        - alert: LevelDBHighErrorRate
+          # leveldb_errors_total is a Counter incremented on any LevelDB
+          # read, write, or open error.
+          expr: >-
+            rate(leveldb_errors_total{job="{{ include "leveldb-app.fullname" . }}"}[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Continuous LevelDB errors"
+            description: >-
+              LevelDB operation errors have been occurring for 5 minutes.
+              This may indicate a corrupted database or a full disk.
+              Check: kubectl logs -n {{ .Release.Namespace }} leveldb-app-0
+
+        # ── Backup health ───────────────────────────────────────────────────
+        # These rules use kube-state-metrics (bundled with kube-prometheus-stack).
+
+        - alert: LevelDBBackupJobFailed
+          # kube_job_status_failed > 0 when a Job's status.failed count is nonzero.
+          expr: >-
+            kube_job_status_failed{
+              namespace="{{ .Release.Namespace }}",
+              job_name=~"leveldb-app-backup-.*"
+            } > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backup job has failed"
+            description: >-
+              A backup job in namespace {{ .Release.Namespace }} completed with a
+              failure status. Inspect the job logs:
+              kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=backup --tail=100
+
+        - alert: LevelDBBackupNotRunRecently
+          # Fires when no backup job has completed successfully in 8 hours (28800s),
+          # or when no completion timestamp exists at all (first deploy or all jobs purged).
+          expr: >-
+            absent(kube_job_status_completion_time{
+              namespace="{{ .Release.Namespace }}",
+              job_name=~"leveldb-app-backup-.*"
+            })
+            or (
+              time() - max(kube_job_status_completion_time{
+                namespace="{{ .Release.Namespace }}",
+                job_name=~"leveldb-app-backup-.*"
+              }) > 28800
+            )
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No recent backup"
+            description: >-
+              No backup job has completed in the last 8 hours (or no completion
+              time is recorded). Check the CronJob status:
+              kubectl get cronjob -n {{ .Release.Namespace }}
+              make backup-status
+{{- end }}

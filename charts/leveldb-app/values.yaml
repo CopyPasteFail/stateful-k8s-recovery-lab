@@ -1,0 +1,157 @@
+# LevelDB is single-writer. replicaCount must remain 1 to avoid data
+# corruption. Do not increase replicas without migrating to a multi-writer
+# storage backend. See docs/tradeoffs.md.
+replicaCount: 1
+
+image:
+  repository: stateful-k8s-recovery-lab/leveldb-app
+  tag: local
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+persistence:
+  enabled: true
+  # 1Gi is sufficient for a local demo. Resize via PVC expansion for real workloads.
+  size: 1Gi
+  accessMode: ReadWriteOnce
+  # Empty string uses the cluster's default StorageClass.
+  storageClassName: ""
+  # The volume is mounted here; the app writes to DATA_DIR inside this mount.
+  mountPath: /data
+
+env:
+  dataDir: /data/leveldb
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Pod-level security context: sets UID/GID/fsGroup for all containers.
+# fsGroup causes Kubernetes to chown the mounted PVC to this GID before start.
+# UID 1000 matches the 'app' user created in the Dockerfile.
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Container-level security context.
+# readOnlyRootFilesystem is safe because the app only writes to the mounted
+# /data volume; it does not write to the root filesystem.
+securityContext:
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+backup:
+  enabled: true
+
+  # Cron expression: fire every 6 hours at the top of the hour.
+  schedule: "0 */6 * * *"
+
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+
+  # Job is killed if it runs longer than 6 hours (21600 seconds).
+  activeDeadlineSeconds: 21600
+
+  # No automatic retries. A failed backup should be investigated, not silently
+  # retried — a second attempt may fail due to a stale Restic repository lock.
+  backoffLimit: 0
+
+  restic:
+    # s3: prefix selects the Restic S3-compatible backend.
+    repository: "s3:http://minio.minio-system.svc.cluster.local:9000/restic"
+
+    # LOCAL DEMO ONLY. Use an external secrets manager in production.
+    # This value ends up in a Kubernetes Secret; it is not written to disk here.
+    password: "local-demo-restic-password"
+
+    # Path inside the backup container that Restic reads.
+    # The app PVC is mounted at /backup-source, and the app writes LevelDB data
+    # to /data/leveldb (which appears here as /backup-source/leveldb).
+    backupPath: /backup-source/leveldb
+
+    snapshotTag: leveldb-app
+
+  # LOCAL DEMO ONLY. MinIO S3 credentials for the Restic backend.
+  # These match helm-values/minio.yaml. Replace with external secrets in production.
+  s3:
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+
+  image:
+    repository: restic/restic
+    # Pinned to a specific stable release for local-demo reproducibility.
+    # Latest: https://hub.docker.com/r/restic/restic/tags
+    tag: "0.17.3"
+    pullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+monitoring:
+  # Disabled by default so the chart deploys on clusters that do not have the
+  # monitoring.coreos.com CRDs (ServiceMonitor, PrometheusRule) installed.
+  #
+  # Enable after deploying kube-prometheus-stack:
+  #   make deploy-observability
+  #   MONITORING=1 make deploy
+  #
+  # Or pass --set flags directly:
+  #   helm upgrade --install leveldb-app charts/leveldb-app \
+  #     --set monitoring.enabled=true \
+  #     --set monitoring.serviceMonitor.enabled=true \
+  #     --set monitoring.prometheusRule.enabled=true \
+  #     --set monitoring.grafanaDashboard.enabled=true
+  enabled: false
+
+  serviceMonitor:
+    # ServiceMonitor instructs the Prometheus operator to scrape /metrics.
+    enabled: false
+    # How often Prometheus scrapes the app endpoint.
+    interval: 30s
+
+  prometheusRule:
+    # PrometheusRule defines alert rules evaluated by Prometheus.
+    enabled: false
+
+  grafanaDashboard:
+    # ConfigMap picked up by the Grafana sidecar (requires kube-prometheus-stack
+    # with grafana.sidecar.dashboards.enabled=true).
+    enabled: false
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    failureThreshold: 3
+  startup:
+    path: /readyz
+    # 30 × 2s = 60s budget for LevelDB to open on a slow volume.
+    failureThreshold: 30
+    periodSeconds: 2

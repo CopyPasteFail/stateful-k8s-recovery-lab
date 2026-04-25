@@ -1,0 +1,16 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  # Must match CLUSTER_NAME in scripts/lib/common.sh
+  name: stateful-recovery
+servers: 1
+agents: 0
+options:
+  k3s:
+    extraArgs:
+      # Disable the built-in Traefik ingress controller.
+      # Access to services is handled via kubectl port-forward, so a cluster-level
+      # ingress controller is unnecessary and consumes ~100 MB of memory.
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*

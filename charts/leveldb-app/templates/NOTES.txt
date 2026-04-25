@@ -1,0 +1,34 @@
+App deployed: {{ include "leveldb-app.fullname" . }}
+Namespace:    {{ .Release.Namespace }}
+
+Port-forward:
+  kubectl port-forward svc/{{ include "leveldb-app.fullname" . }} 8080:8080 -n {{ .Release.Namespace }}
+
+  Or via make:
+  make port-forward TARGET=app
+
+API (after port-forward):
+  PUT    http://localhost:8080/kv/<key>     # store a value
+  GET    http://localhost:8080/kv/<key>     # read a value
+  DELETE http://localhost:8080/kv/<key>     # delete a key
+  GET    http://localhost:8080/healthz      # liveness
+  GET    http://localhost:8080/readyz       # readiness
+  GET    http://localhost:8080/metrics      # Prometheus metrics
+
+{{- if .Values.backup.enabled }}
+
+Backup CronJob: {{ include "leveldb-app.fullname" . }}-backup
+  Schedule:  {{ .Values.backup.schedule }} (every 6 hours)
+  Repository: {{ .Values.backup.restic.repository }}
+
+  make backup          # trigger one-off backup now
+  make backup-status   # show CronJob and recent Job status
+  make suspend-backups # pause scheduled backups
+  make resume-backups  # re-enable scheduled backups
+{{- end }}
+
+Next steps:
+  make status
+  make smoke-test
+  make seed-data
+  make backup

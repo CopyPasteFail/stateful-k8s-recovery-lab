@@ -1,0 +1,54 @@
+# helm-values/minio.yaml
+# MinIO Helm chart values for the local k3d cluster.
+#
+# WARNING: rootUser and rootPassword below are local-demo-only credentials.
+#          Never reuse them outside this cluster.
+#          See docs/tradeoffs.md for production secrets guidance.
+
+mode: standalone
+
+# Local demo credentials -- NOT for production use
+rootUser: "minioadmin"
+rootPassword: "minioadmin"
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+service:
+  type: ClusterIP
+  port: 9000
+
+consoleService:
+  type: ClusterIP
+  port: 9001
+
+# Provision the Restic backup bucket on install and upgrade.
+# The chart creates a post-install/post-upgrade hook Job that runs
+# `mc mb --ignore-existing`, so this is safe to rerun.
+buckets:
+  - name: restic
+    policy: none
+    purge: false
+    versioning: false
+    objectlocking: false
+
+ingress:
+  enabled: false
+
+consoleIngress:
+  enabled: false
+
+# Disable ServiceMonitor until the observability stack is deployed.
+metrics:
+  serviceMonitor:
+    enabled: false
+    includeNode: false

@@ -1,0 +1,25 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "leveldb-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "leveldb-app.labels" . | nindent 4 }}
+spec:
+  # Use the app.kubernetes.io/name label value ("leveldb-app") as the Prometheus
+  # job label. This keeps metric selectors in dashboards and alert rules stable
+  # regardless of the Helm release name.
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      {{- include "leveldb-app.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      # Honor the Prometheus default scrape timeout (10s) — no override needed.
+{{- end }}

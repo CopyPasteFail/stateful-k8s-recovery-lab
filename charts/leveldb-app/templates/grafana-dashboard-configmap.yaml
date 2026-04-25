@@ -1,0 +1,16 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafanaDashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "leveldb-app.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "leveldb-app.labels" . | nindent 4 }}
+    # The Grafana sidecar watches for this label and loads the dashboard JSON
+    # automatically. The label key/value must match grafana.sidecar.dashboards
+    # settings in the kube-prometheus-stack values.
+    grafana_dashboard: "1"
+data:
+  leveldb-app-overview.json: |-
+    {{- .Files.Get "dashboards/leveldb-app-overview.json" | nindent 4 }}
+{{- end }}

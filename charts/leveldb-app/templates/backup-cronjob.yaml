@@ -1,0 +1,127 @@
+{{- if .Values.backup.enabled }}
+{{- /*
+  LOCAL DEMO NOTE — live PVC mount:
+    This CronJob mounts the app PVC (data-{{ include "leveldb-app.fullname" . }}-0)
+    read-only at /backup-source while the app pod continues writing. On a
+    single-node k3d cluster this works because all pods are co-located and the
+    local-path-provisioner does not enforce the RWO access mode at the pod level.
+
+    This is acceptable for exercising the backup workflow in development.
+    It is NOT acceptable for production because Restic may read files before
+    and after a given LevelDB write, producing a backup that is not
+    crash-consistent.
+
+    Production approach: take an LVM or CSI volume snapshot first, then run
+    Restic against the snapshot. See docs/backup-restore.md#consistency-boundary.
+
+  If Kubernetes refuses the second mount (e.g. stricter storage drivers):
+    1. The backup pod will fail to schedule (check Events on the pod).
+    2. Resolution options: use a ReadWriteMany storage class, migrate to a
+       snapshot-based approach, or run Restic inside the app pod as a sidecar.
+*/ -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "leveldb-app.fullname" . }}-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "leveldb-app.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "leveldb-app.labels" . | nindent 8 }}
+        app.kubernetes.io/component: backup
+    spec:
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      backoffLimit: {{ .Values.backup.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            {{- include "leveldb-app.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "leveldb-app.serviceAccountName" . }}
+          # Run as the same UID as the app so the backup container can read all
+          # files on the PVC regardless of file permissions.
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+          containers:
+            - name: restic
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              # The restic/restic image sets ENTRYPOINT to the restic binary.
+              # Override with a shell so we can run the init+backup sequence.
+              # /bin/sh is BusyBox ash (Alpine); pipefail is not available.
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  printf '%s\n' '' '=== leveldb-app backup ==='
+                  printf 'repository : %s\n' "${RESTIC_REPOSITORY}"
+                  printf 'backup path: %s\n' "{{ .Values.backup.restic.backupPath }}"
+
+                  printf '%s\n' '' '--- init (idempotent) ---'
+                  if restic cat config > /dev/null 2>&1; then
+                    printf '[info] repository already initialized\n'
+                  else
+                    printf '[info] initializing restic repository...\n'
+                    restic init
+                    printf '[ok]   repository initialized\n'
+                  fi
+
+                  printf '%s\n' '' '--- backup ---'
+                  restic backup {{ .Values.backup.restic.backupPath }} \
+                    --tag {{ .Values.backup.restic.snapshotTag }}
+                  printf '[ok]   backup complete\n'
+
+                  printf '%s\n' '' '--- recent snapshots ---'
+                  restic snapshots --latest 5
+
+                  printf '%s\n' '' '=== backup job done ==='
+              env:
+                - name: RESTIC_REPOSITORY
+                  value: {{ .Values.backup.restic.repository | quote }}
+                - name: RESTIC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "leveldb-app.fullname" . }}-restic
+                      key: restic-password
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "leveldb-app.fullname" . }}-restic
+                      key: aws-access-key-id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "leveldb-app.fullname" . }}-restic
+                      key: aws-secret-access-key
+                # restic tries to create /.cache which is root-owned; redirect
+                # the cache to /tmp where the non-root user can write.
+                - name: RESTIC_CACHE_DIR
+                  value: /tmp/restic-cache
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              volumeMounts:
+                - name: backup-source
+                  mountPath: /backup-source
+                  readOnly: true
+          volumes:
+            - name: backup-source
+              persistentVolumeClaim:
+                # PVC name format: <vct-name>-<statefulset-name>-<ordinal>
+                # The StatefulSet VCT name is 'data', ordinal is always 0
+                # (LevelDB is single-writer; replicaCount must stay at 1).
+                claimName: data-{{ include "leveldb-app.fullname" . }}-0
+                readOnly: true
+{{- end }}
