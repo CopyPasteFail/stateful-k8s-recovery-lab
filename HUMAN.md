@@ -161,6 +161,12 @@ This runs `scripts/deploy-minio.sh`, which:
 
 Safe to rerun: `helm upgrade --install` is idempotent. The bucket provisioning Job uses `mc mb --ignore-existing`.
 
+The MinIO client image used for bucket verification is pinned by default and can be overridden:
+
+```bash
+MINIO_MC_IMAGE=minio/mc:RELEASE.2025-08-13T08-35-41Z make deploy-minio
+```
+
 **Access the MinIO UI or API locally:**
 
 ```bash

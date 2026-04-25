@@ -15,6 +15,7 @@ HELM_REPO_URL="https://charts.min.io/"
 VALUES_FILE="${REPO_ROOT}/helm-values/minio.yaml"
 VERIFY_JOB="minio-ensure-restic-bucket"
 MINIO_SVC="http://minio.${NS_MINIO}.svc.cluster.local:9000"
+MINIO_MC_IMAGE="${MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-08-13T08-35-41Z}"
 
 printf '%s\n' '' "=== stateful-k8s-recovery-lab: deploy MinIO ==="
 
@@ -94,6 +95,7 @@ section "Bucket"
 info "Removing any previous '${VERIFY_JOB}' Job ..."
 kubectl delete job "${VERIFY_JOB}" --namespace "${NS_MINIO}" --ignore-not-found >/dev/null
 
+info "MinIO client image: ${MINIO_MC_IMAGE}"
 info "Creating Job '${VERIFY_JOB}' to ensure bucket 'restic' exists ..."
 kubectl create -f - <<EOF
 apiVersion: batch/v1
@@ -108,7 +110,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: mc
-          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+          image: ${MINIO_MC_IMAGE}
           env:
             - name: MINIO_ROOT_USER
               valueFrom:
