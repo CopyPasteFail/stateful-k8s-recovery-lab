@@ -49,14 +49,14 @@ make run-app-local
 # or: (cd app && go run ./cmd/leveldb-app)
 ```
 
-The server listens on `:8080` by default. Test with curl:
+The local development script listens on `:18081` by default. Test with curl:
 
 ```bash
-curl -X PUT -d "hello world" http://localhost:8080/kv/mykey
-curl http://localhost:8080/kv/mykey
-curl -X DELETE http://localhost:8080/kv/mykey
-curl http://localhost:8080/healthz
-curl http://localhost:8080/metrics
+curl -X PUT -d "hello world" http://localhost:18081/kv/mykey
+curl http://localhost:18081/kv/mykey
+curl -X DELETE http://localhost:18081/kv/mykey
+curl http://localhost:18081/healthz
+curl http://localhost:18081/metrics
 ```
 
 **Run tests:**

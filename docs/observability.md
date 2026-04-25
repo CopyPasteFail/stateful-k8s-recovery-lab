@@ -208,6 +208,24 @@ alertmanager:
             channel: '#alerts'
 ```
 
+### Expected local-demo alert noise
+
+When running `kube-prometheus-stack` in local k3d, some upstream Kubernetes control-plane alerts may fire even though the demo itself is healthy. Based on the current local cluster, the following alerts are expected noise:
+
+| Alert | Source | Classification | Why it can fire locally |
+|---|---|---|---|
+| `Watchdog` | `general.rules` | kube-prometheus default noise | This alert is designed to always fire so the alert pipeline stays exercised. |
+| `KubeControllerManagerDown` | `kubernetes-system-controller-manager` | kube-prometheus default noise | Local k3d clusters typically do not expose a reachable controller-manager target to Prometheus. |
+| `KubeProxyDown` | `kubernetes-system-kube-proxy` | kube-prometheus default noise | Local k3d setups often do not expose kube-proxy as a scrape target in the same way as a managed cluster. |
+| `KubeSchedulerDown` | `kubernetes-system-scheduler` | kube-prometheus default noise | Local k3d setups often do not expose kube-scheduler as a scrape target in the same way as a managed cluster. |
+
+These alerts are useful to show that Prometheus and Alertmanager are working, but they should not be treated as app, backup, MinIO, or storage failures in this demo.
+
+The current Alertmanager UI state is also expected for the local demo:
+
+- `Cluster Status: disabled` is normal for a single local Alertmanager instance without clustering.
+- `receiver: "null"` is normal because the local demo keeps alerts visible in the UI but does not forward them externally.
+
 ---
 
 ## Troubleshooting

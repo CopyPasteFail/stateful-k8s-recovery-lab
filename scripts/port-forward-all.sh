@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/port-forward-common.sh"
 
 require kubectl
+require setsid
 
 mkdir -p "${PORT_FORWARD_STATE_DIR}"
 

@@ -2,18 +2,19 @@ App deployed: {{ include "leveldb-app.fullname" . }}
 Namespace:    {{ .Release.Namespace }}
 
 Port-forward:
-  kubectl port-forward svc/{{ include "leveldb-app.fullname" . }} 8080:8080 -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ include "leveldb-app.fullname" . }} 18081:8080 -n {{ .Release.Namespace }}
 
   Or via make:
   make port-forward TARGET=app
 
 API (after port-forward):
-  PUT    http://localhost:8080/kv/<key>     # store a value
-  GET    http://localhost:8080/kv/<key>     # read a value
-  DELETE http://localhost:8080/kv/<key>     # delete a key
-  GET    http://localhost:8080/healthz      # liveness
-  GET    http://localhost:8080/readyz       # readiness
-  GET    http://localhost:8080/metrics      # Prometheus metrics
+  GET    http://localhost:18081/           # API-only root with endpoint list
+  PUT    http://localhost:18081/kv/<key>     # store a value
+  GET    http://localhost:18081/kv/<key>     # read a value
+  DELETE http://localhost:18081/kv/<key>     # delete a key
+  GET    http://localhost:18081/healthz      # liveness
+  GET    http://localhost:18081/readyz       # readiness
+  GET    http://localhost:18081/metrics      # Prometheus metrics
 
 {{- if .Values.backup.enabled }}
 

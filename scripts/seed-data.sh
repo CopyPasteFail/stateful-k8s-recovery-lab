@@ -111,6 +111,6 @@ printf '%s\n' \
     '' \
     'Read back with:' \
     "  make port-forward TARGET=app" \
-    "  curl http://localhost:8080/kv/environment" \
-    "  curl http://localhost:8080/kv/seeded-at" \
+    "  curl http://localhost:18081/kv/environment" \
+    "  curl http://localhost:18081/kv/seeded-at" \
     ''

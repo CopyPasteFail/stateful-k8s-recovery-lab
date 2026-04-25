@@ -45,7 +45,7 @@ port_forward_target_namespace() {
 
 port_forward_target_local_port() {
     case "$1" in
-        app) printf '%s\n' '8080' ;;
+        app) printf '%s\n' '18081' ;;
         minio-api) printf '%s\n' '9000' ;;
         minio-console) printf '%s\n' '9001' ;;
         grafana) printf '%s\n' '3000' ;;
@@ -57,7 +57,8 @@ port_forward_target_local_port() {
 
 port_forward_target_service_port() {
     case "$1" in
-        app|minio-api|minio-console|prometheus|alertmanager) printf '%s\n' "$(port_forward_target_local_port "$1")" ;;
+        app) printf '%s\n' '8080' ;;
+        minio-api|minio-console|prometheus|alertmanager) printf '%s\n' "$(port_forward_target_local_port "$1")" ;;
         grafana) printf '%s\n' '80' ;;
         *) return 1 ;;
     esac
@@ -158,10 +159,10 @@ port_forward_start() {
     fi
 
     info "Forwarding $(port_forward_target_title "${target}"): http://localhost:${local_port}"
-    nohup kubectl port-forward "svc/${service}" "${local_port}:${service_port}" \
+    setsid kubectl port-forward "svc/${service}" "${local_port}:${service_port}" \
         --namespace "${namespace}" \
         --address 127.0.0.1 \
-        >"${log_file}" 2>&1 &
+        >"${log_file}" 2>&1 < /dev/null &
     printf '%s\n' "$!" >"${pid_file}"
     port_forward_wait_until_ready "${target}"
 }

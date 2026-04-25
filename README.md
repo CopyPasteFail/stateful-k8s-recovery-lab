@@ -2,7 +2,7 @@
 
 A production-oriented reference implementation for running a stateful application on Kubernetes with automated backup, point-in-time restore, and full observability.
 
-The application is a Go HTTP key-value service backed by LevelDB. Everything here—backup, restore, monitoring, alerting—is designed to be understandable, operable, and extensible rather than minimal or toy-grade.
+The application is a Go API-only key-value service backed by LevelDB. Everything here—backup, restore, monitoring, alerting—is designed to be understandable, operable, and extensible rather than minimal or toy-grade.
 
 ---
 
@@ -57,14 +57,15 @@ make smoke-test           # run end-to-end sanity checks
 
 ```bash
 make test-app             # run Go unit tests
-make run-app-local        # start the app on localhost:8080 (data in .local/leveldb)
+make run-app-local        # start the app on localhost:18081 (data in .local/leveldb)
 
 # Example usage while running:
-curl -X PUT  http://localhost:8080/kv/greeting -d "hello"
-curl         http://localhost:8080/kv/greeting
-curl -X DELETE http://localhost:8080/kv/greeting
-curl         http://localhost:8080/healthz
-curl         http://localhost:8080/metrics
+curl         http://localhost:18081/
+curl -X PUT  http://localhost:18081/kv/greeting -d "hello"
+curl         http://localhost:18081/kv/greeting
+curl -X DELETE http://localhost:18081/kv/greeting
+curl         http://localhost:18081/healthz
+curl         http://localhost:18081/metrics
 ```
 
 ---

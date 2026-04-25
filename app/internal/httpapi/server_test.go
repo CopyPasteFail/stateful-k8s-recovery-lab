@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,34 @@ func do(srv *httpapi.Server, method, path, body string) *httptest.ResponseRecord
 	w := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(w, req)
 	return w
+}
+
+func TestRootEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+
+	w := do(srv, http.MethodGet, "/", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var response struct {
+		Description string   `json:"description"`
+		Endpoints   []string `json:"endpoints"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("unmarshal root response: %v", err)
+	}
+
+	if response.Description == "" {
+		t.Fatal("root response description is empty")
+	}
+
+	body := w.Body.String()
+	for _, expectedSubstring := range []string{"/healthz", "/readyz", "/metrics", "/kv/{key}"} {
+		if !strings.Contains(body, expectedSubstring) {
+			t.Errorf("root response missing %q", expectedSubstring)
+		}
+	}
 }
 
 func TestPutGetDeleteCycle(t *testing.T) {

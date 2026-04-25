@@ -88,7 +88,7 @@ printf '%s\n' \
     '╚══════════════════════════════════════════════════════════════╝' \
     '' \
     '  Access the app:' \
-    '    make port-forward TARGET=app            # http://localhost:8080' \
+    '    make port-forward TARGET=app            # http://localhost:18081' \
     '' \
     '  Access observability:' \
     '    make port-forward TARGET=grafana        # http://localhost:3000' \

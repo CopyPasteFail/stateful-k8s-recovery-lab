@@ -32,7 +32,7 @@ demo-full: ## Run the full demo including Prometheus, Grafana, Loki (~10-15 min 
 test-app: ## Run Go unit tests for the app
 	@bash scripts/test-app.sh
 
-run-app-local: ## Run the app locally (DATA_DIR=.local/leveldb, PORT=8080)
+run-app-local: ## Run the app locally (DATA_DIR=.local/leveldb, PORT=18081)
 	@bash scripts/run-app-local.sh
 
 ##@ Setup

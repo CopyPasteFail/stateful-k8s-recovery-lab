@@ -141,19 +141,20 @@ The port-forward commands print local-demo credentials for UIs that require logi
 
 | Component | Command | Local URL |
 |---|---|---|
-| All available local access points | `make port-forward-all` | `http://localhost:3000`, `:9090`, `:9093`, `:9001`, `:8080` |
+| All available local access points | `make port-forward-all` | `http://localhost:3000`, `:9090`, `:9093`, `:9001`, `:18081` |
 | Stop tracked port-forwards | `make port-forward-stop` | n/a |
 | Grafana | `make port-forward TARGET=grafana` | `http://localhost:3000` |
 | Prometheus | `make port-forward TARGET=prometheus` | `http://localhost:9090` |
 | Alertmanager | `make port-forward TARGET=alertmanager` | `http://localhost:9093` |
 | MinIO Console | `make port-forward TARGET=minio-console` | `http://localhost:9001` |
-| App API | `make port-forward TARGET=app` | `http://localhost:8080` |
+| App API | `make port-forward TARGET=app` | `http://localhost:18081` |
 
 What to look for:
 - Grafana should show the app overview dashboard with request rate, latency, readiness, and backup signals.
 - Prometheus should be scraping the app service and exposing the metrics listed above.
 - Alertmanager should show the local alerting surface, even though this demo does not forward alerts externally.
 - MinIO Console should show the backup bucket and recent activity.
+- The app API root should return JSON that lists `GET /healthz`, `GET /readyz`, `GET /metrics`, `PUT /kv/{key}`, `GET /kv/{key}`, and `DELETE /kv/{key}`.
 - The app API should respond to the health, readiness, metrics, and key-value endpoints.
 
 ---
@@ -180,10 +181,11 @@ Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoff
 
 ### Application Operations
 
-The app is a single-writer LevelDB service exposed through a Kubernetes `StatefulSet`.
+The app is a single-writer API-only LevelDB service exposed through a Kubernetes `StatefulSet`.
 
 The main demo flow deployes it and seeds sample data.
 When it is healthy, `leveldb-app-0` is running and ready, the health and readiness probes pass, and the metrics endpoint exposes the application counters and histograms.
+`http://localhost:18081/` returns a small JSON document that lists the useful API endpoints.
 
 The key caveat is that LevelDB supports one writer per dataset. Do not scale the write path horizontally and expect it to behave like a shared database.
 

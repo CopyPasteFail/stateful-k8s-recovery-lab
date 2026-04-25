@@ -3,7 +3,7 @@
 #
 # Usage (via make):
 #   make port-forward                       print available targets
-#   make port-forward TARGET=app            App API      -> http://localhost:8080
+#   make port-forward TARGET=app            App API      -> http://localhost:18081
 #   make port-forward TARGET=minio-api      MinIO API    -> http://localhost:9000
 #   make port-forward TARGET=minio-console  MinIO Console-> http://localhost:9001
 #   make port-forward TARGET=grafana        Grafana      -> http://localhost:3000

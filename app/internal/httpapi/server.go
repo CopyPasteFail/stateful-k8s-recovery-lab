@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -26,6 +27,8 @@ type Server struct {
 	dbErrors   *prometheus.CounterVec
 	readyGauge prometheus.Gauge
 }
+
+const rootEndpointDescription = "API-only LevelDB-backed key-value service."
 
 // NewServer constructs a Server bound to addr. The caller must call
 // ListenAndServe (or Shutdown in tests).
@@ -65,6 +68,7 @@ func NewServer(st *store.Store, addr string) *Server {
 	s.SetReady(true)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /", s.handleRoot)
 	mux.HandleFunc("PUT /kv/{key}", s.handlePut)
 	mux.HandleFunc("GET /kv/{key}", s.handleGet)
 	mux.HandleFunc("DELETE /kv/{key}", s.handleDelete)
@@ -81,6 +85,34 @@ func NewServer(st *store.Store, addr string) *Server {
 	}
 
 	return s
+}
+
+type rootResponse struct {
+	Description string   `json:"description"`
+	Endpoints   []string `json:"endpoints"`
+}
+
+// handleRoot returns a short JSON description of the service and the useful
+// endpoints for local demo users.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := rootResponse{
+		Description: rootEndpointDescription,
+		Endpoints: []string{
+			"GET /healthz",
+			"GET /readyz",
+			"GET /metrics",
+			"PUT /kv/{key}",
+			"GET /kv/{key}",
+			"DELETE /kv/{key}",
+		},
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("root: write response: %v", err)
+	}
 }
 
 // SetReady marks the server as ready or not ready. It updates both the

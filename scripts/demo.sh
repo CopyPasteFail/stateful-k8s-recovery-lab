@@ -87,7 +87,7 @@ printf '%s\n' \
     '╚══════════════════════════════════════════════════════════════╝' \
     '' \
     '  Access the app:' \
-    '    make port-forward TARGET=app       # http://localhost:8080' \
+    '    make port-forward TARGET=app       # http://localhost:18081' \
     '' \
     '  Access MinIO:' \
     '    make port-forward TARGET=minio-console  # http://localhost:9001' \

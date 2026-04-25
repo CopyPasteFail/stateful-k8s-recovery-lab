@@ -15,7 +15,7 @@ fi
 
 DEFAULT_DATA_DIR="${REPO_ROOT}/.local/leveldb"
 export DATA_DIR="${DATA_DIR:-${DEFAULT_DATA_DIR}}"
-export PORT="${PORT:-8080}"
+export PORT="${PORT:-18081}"
 
 mkdir -p "${DATA_DIR}"
 
