@@ -156,7 +156,7 @@ Grafana dashboard JSON files are in `charts/leveldb-app/dashboards/`. When you e
 
 To edit a dashboard interactively in Grafana and export it:
 
-1. `make port-forward`
+1. `make port-forward-all`
 2. Open `http://localhost:3000`
 3. Edit the dashboard
 4. Export as JSON (Dashboard settings → JSON model)
@@ -194,4 +194,4 @@ kubectl delete pod -n leveldb-system leveldb-app-0
 ```
 
 **Port-forward dies silently:**
-`kubectl port-forward` exits if the target pod restarts. Rerun `make port-forward` after a pod restart.
+`kubectl port-forward` exits if the target pod restarts. Rerun `make port-forward` for one service or `make port-forward-all` for the full local access set after a pod restart.

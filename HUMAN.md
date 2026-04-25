@@ -64,11 +64,8 @@ make backup-status
 ### (Optional) Inspect the UI
 
 ```bash
-make port-forward TARGET=grafana
-make port-forward TARGET=prometheus
-make port-forward TARGET=alertmanager
-make port-forward TARGET=minio-console
-make port-forward TARGET=app
+make port-forward-all
+make port-forward-stop
 ```
 
 ### Restore a Backup
@@ -139,10 +136,13 @@ MinIO Console should show the `restic` bucket.
 
 ## Useful Local Access Points
 
-Run port-forwarding one target at a time in a separate terminal.
+Start all local access points in one terminal with `make port-forward-all`. Stop them later with `make port-forward-stop`.
+The port-forward commands print local-demo credentials for UIs that require login, such as Grafana and MinIO Console.
 
 | Component | Command | Local URL |
 |---|---|---|
+| All available local access points | `make port-forward-all` | `http://localhost:3000`, `:9090`, `:9093`, `:9001`, `:8080` |
+| Stop tracked port-forwards | `make port-forward-stop` | n/a |
 | Grafana | `make port-forward TARGET=grafana` | `http://localhost:3000` |
 | Prometheus | `make port-forward TARGET=prometheus` | `http://localhost:9090` |
 | Alertmanager | `make port-forward TARGET=alertmanager` | `http://localhost:9093` |

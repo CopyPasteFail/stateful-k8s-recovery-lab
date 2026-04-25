@@ -7,7 +7,7 @@
         bootstrap deploy deploy-minio deploy-observability \
         seed-data smoke-test \
         backup backup-status suspend-backups resume-backups restore \
-        logs status port-forward \
+        logs status port-forward port-forward-all port-forward-stop \
         destroy \
         test-app run-app-local \
         demo demo-full
@@ -98,5 +98,11 @@ logs: ## Tail app and recent backup/restore Job logs
 status: ## Print cluster, StatefulSet, PVC, and CronJob status summary
 	@bash scripts/status.sh
 
-port-forward: ## Forward service ports locally (TARGET=minio-api|minio-console)
+port-forward: ## Forward one service locally (TARGET=app|minio-api|minio-console|grafana|prometheus|alertmanager)
 	@bash scripts/port-forward.sh
+
+port-forward-all: ## Start all available port-forwards in the background
+	@bash scripts/port-forward-all.sh
+
+port-forward-stop: ## Stop all tracked background port-forwards
+	@bash scripts/port-forward-stop.sh

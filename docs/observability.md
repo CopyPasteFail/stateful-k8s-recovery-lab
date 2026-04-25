@@ -28,12 +28,18 @@ make deploy-observability
 
 ## Accessing the stack locally
 
-Run one target at a time (each `port-forward` runs in the foreground — press Ctrl-C to stop):
+Run the aggregate target to start every available local access point in the background:
 
 ```bash
-make port-forward TARGET=grafana        # http://localhost:3000
-make port-forward TARGET=prometheus     # http://localhost:9090
-make port-forward TARGET=alertmanager   # http://localhost:9093
+make port-forward-all
+```
+
+The command prints local-demo credentials for UIs that require login, including Grafana and MinIO Console when they are available.
+
+Stop them later with:
+
+```bash
+make port-forward-stop
 ```
 
 Run `make port-forward` with no `TARGET` to print the available targets.
