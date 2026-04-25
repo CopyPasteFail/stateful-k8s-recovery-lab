@@ -33,7 +33,7 @@ This document covers the backup and restore design, the operator procedures, and
 
 **RPO — Recovery Point Objective:** The maximum age of the most recent recoverable backup.
 
-This system targets a **six-hour RPO**. The backup CronJob fires every six hours. If a CronJob run fails, the Prometheus alert `BackupNotRunRecently` fires after eight hours (2x the interval), giving one retry window before alerting.
+This system targets a **six-hour RPO**. The backup CronJob fires every six hours. If a CronJob run fails, the Prometheus alert `LevelDBBackupNotRunRecently` fires after eight hours (2x the interval), giving one retry window before alerting.
 
 An RPO of six hours means: in the worst case, a full system failure immediately before a scheduled backup would lose up to six hours of writes.
 
@@ -66,7 +66,7 @@ Restic is an open-source backup tool with native support for S3-compatible backe
 
 - **Encryption:** every snapshot is encrypted with the Restic repository password before it leaves the pod. MinIO holds only ciphertext.
 - **Deduplication:** Restic computes a rolling hash over the data stream. Unchanged chunks are referenced, not re-uploaded. A six-hour incremental backup of a dataset with a low change rate (e.g., 10 GB changed out of 2 TB) transfers only the changed chunks plus metadata.
-- **Verification:** after each backup Job, `restic check` verifies the repository index. A check failure triggers a separate Prometheus metric.
+- **Integrity checking:** `restic check` verifies the repository index. The local demo backup Job does not run `restic check` after every snapshot — it runs `restic init` (idempotent), `restic backup`, and `restic snapshots`. For production, schedule periodic `restic check` runs separately from the six-hour backup path.
 
 ### What is backed up
 
@@ -86,7 +86,7 @@ With a fixed host name, Restic finds the previous snapshot for `leveldb-app`, co
 
 ### Retention policy
 
-Restic `forget --prune` is run at the end of each successful backup Job with a policy:
+The local demo backup Job does not run `restic forget --prune`. Snapshots accumulate in the repository until manually pruned. For production, add a `restic forget --prune` step to the backup Job (or a separate scheduled Job) with a policy appropriate for your storage capacity and compliance requirements. Example policy:
 
 ```
 --keep-hourly 24    # keep last 24 hourly snapshots
@@ -94,7 +94,7 @@ Restic `forget --prune` is run at the end of each successful backup Job with a p
 --keep-weekly 4     # keep last 4 weekly snapshots
 ```
 
-Adjust this policy in the Helm values based on MinIO storage capacity and compliance requirements.
+Without pruning, the Restic repository grows without bound. Add retention pruning before going to production.
 
 ---
 

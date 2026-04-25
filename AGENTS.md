@@ -12,8 +12,13 @@ This is a production-oriented reference implementation for a stateful Kubernetes
 
 ## What exists now
 
-- Documentation and planning files only
-- No Kubernetes manifests, Helm charts, scripts, or Go source code have been created yet
+The full Phase 1 implementation is complete:
+
+- `app/` — Go HTTP key-value service (LevelDB backend, Prometheus metrics, graceful shutdown)
+- `charts/leveldb-app/` — Helm chart (StatefulSet, PVC, Service, RBAC, backup CronJob, ServiceMonitor, PrometheusRule, Grafana dashboard)
+- `scripts/` — idempotent shell scripts for every Make target (bootstrap, deploy, backup, restore, smoke-test, observability, etc.)
+- `helm-values/` — values files for MinIO, kube-prometheus-stack, Loki, Promtail
+- `docs/` — implemented and should stay aligned with actual script and chart behavior
 
 ---
 

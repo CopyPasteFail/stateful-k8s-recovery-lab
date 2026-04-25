@@ -10,36 +10,36 @@ This document describes the planned implementation phases for `stateful-k8s-reco
 
 **Scope:**
 
-- [ ] `Makefile` with all planned targets (`make help`, `make check-prereqs`, `make bootstrap`, etc.)
-- [ ] Shell scripts in `scripts/` backing each target; all scripts idempotent
-- [ ] `scripts/check-prereqs.sh` — verify Docker, k3d, kubectl, helm
-- [ ] `scripts/install-prereqs.sh` — install k3d, kubectl, helm
-- [ ] `scripts/install-docker.sh` — install Docker Engine on Ubuntu
-- [ ] `scripts/bootstrap.sh` — create k3d cluster, namespaces, CRDs
-- [ ] `scripts/destroy.sh` — tear down the cluster
-- [ ] Go HTTP application in `app/`:
+- [x] `Makefile` with all planned targets (`make help`, `make check-prereqs`, `make bootstrap`, etc.)
+- [x] Shell scripts in `scripts/` backing each target; all scripts idempotent
+- [x] `scripts/check-prereqs.sh` — verify Docker, k3d, kubectl, helm
+- [x] `scripts/install-prereqs.sh` — install k3d, kubectl, helm
+- [x] `scripts/install-docker.sh` — install Docker Engine on Ubuntu
+- [x] `scripts/bootstrap.sh` — create k3d cluster, namespaces, CRDs
+- [x] `scripts/destroy.sh` — tear down the cluster
+- [x] Go HTTP application in `app/`:
   - PUT/GET/DELETE /kv/{key}
   - /healthz, /readyz, /metrics
   - LevelDB backend at /data/leveldb
   - Non-root container, graceful SIGTERM shutdown
-- [ ] `Dockerfile` for the application (multi-stage, distroless or scratch final image)
-- [ ] `charts/leveldb-app/` Helm chart:
+- [x] `Dockerfile` for the application (multi-stage, distroless or scratch final image)
+- [x] `charts/leveldb-app/` Helm chart:
   - StatefulSet with `replicas: 1`
   - PVC via `volumeClaimTemplates`
   - Service, ServiceAccount, RBAC
   - Backup CronJob (`schedule: "0 */6 * * *"`, `concurrencyPolicy: Forbid`)
   - PrometheusRule for backup and app alerts
   - Grafana dashboard ConfigMaps
-- [ ] MinIO deployment via official Helm chart
-- [ ] `scripts/deploy-minio.sh` — install MinIO, create backup bucket, initialize Restic repository
-- [ ] Observability stack via `kube-prometheus-stack` and `loki-stack` Helm charts
-- [ ] `scripts/deploy-observability.sh` — install stack, provision dashboards and alerts
-- [ ] `scripts/backup.sh` — trigger manual backup Job, check for concurrent Job
-- [ ] `scripts/restore.sh` — full restore workflow with concurrency guard, scale-down, verify, scale-up
-- [ ] `scripts/smoke-test.sh` — PUT/GET/DELETE cycle + healthz/readyz/metrics checks
-- [ ] `scripts/seed-data.sh` — write known keys for test baseline
-- [ ] `scripts/status.sh`, `scripts/logs.sh`, `scripts/port-forward.sh`
-- [ ] Go unit and integration tests
+- [x] MinIO deployment via official Helm chart
+- [x] `scripts/deploy-minio.sh` — install MinIO, create backup bucket, initialize Restic repository
+- [x] Observability stack via `kube-prometheus-stack` and `loki-stack` Helm charts
+- [x] `scripts/deploy-observability.sh` — install stack, provision dashboards and alerts
+- [x] `scripts/backup.sh` — trigger manual backup Job, check for concurrent Job
+- [x] `scripts/restore.sh` — full restore workflow with concurrency guard, scale-down, verify, scale-up
+- [x] `scripts/smoke-test.sh` — PUT/GET/DELETE cycle + healthz/readyz/metrics checks
+- [x] `scripts/seed-data.sh` — write known keys for test baseline
+- [x] `scripts/status.sh`, `scripts/logs.sh`, `scripts/port-forward.sh`
+- [x] Go unit and integration tests
 
 **Definition of done for Phase 1:**
 
@@ -63,7 +63,7 @@ make restore
 make smoke-test
 ```
 
-All targets succeed. The smoke test confirms that data written before `make destroy` is present after `make restore`. Grafana dashboards are reachable. The `BackupJobFailed` and `BackupNotRunRecently` alerts exist and can be triggered manually.
+All targets succeed. The smoke test confirms that data written before `make destroy` is present after `make restore`. Grafana dashboards are reachable. The `LevelDBBackupJobFailed` and `LevelDBBackupNotRunRecently` alerts exist and can be triggered manually.
 
 ---
 

@@ -108,7 +108,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: mc
-          image: minio/mc
+          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
           env:
             - name: MINIO_ROOT_USER
               valueFrom:

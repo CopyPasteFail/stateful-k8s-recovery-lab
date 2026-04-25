@@ -196,7 +196,7 @@ Operator: make restore
 
 **RTO (Recovery Time Objective):** Not bounded by this design. Restoring a 2 TB dataset from MinIO depends on I/O throughput. At 200 MB/s (a reasonable SSD read rate), restoring 2 TB takes approximately 3 hours. Network transfer from remote object storage adds to this. Plan and test RTO separately for each production deployment.
 
-The RPO target is enforced by the CronJob schedule and by the `BackupNotRunRecently` Prometheus alert (fires if no successful backup in 8 hours).
+The RPO target is enforced by the CronJob schedule and by the `LevelDBBackupNotRunRecently` Prometheus alert (fires if no successful backup in 8 hours).
 
 ---
 

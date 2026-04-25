@@ -24,31 +24,10 @@ For backup and restore procedures see [docs/backup-restore.md](docs/backup-resto
 
 ---
 
-## Quick demo
-
-The fastest way to bring up the full environment and verify everything works:
-
-```bash
-make demo        # core workflow: app + MinIO + backup (~3-5 min)
-make demo-full   # full platform: adds Prometheus, Grafana, Loki (~10-15 min first run)
-```
-
-Both commands are idempotent — safe to run on an already-running cluster.
-
-**Why restore is not part of the demo:** Restore is a disruptive recovery operation. It scales the application to zero replicas and overwrites PVC data. It is not safe to run automatically as part of a demo sequence. To validate the restore path explicitly after the demo:
-
-```bash
-make backup            # ensure a recent snapshot exists
-make restore           # guided restore: suspend CronJob → scale down → restore → verify → scale up
-# or for a specific snapshot:
-SNAPSHOT=abc12345 make restore
-```
-
----
-
 ## Environment setup
 
-**Required platform:** Ubuntu 22.04 or WSL2 Ubuntu 22.04. The scripts are written for bash on Linux. They are not tested on macOS or native Windows.
+**Required platform:** Linux. The scripts are written for bash on Linux. They are not tested on macOS or native Windows.
+> The repo wast tested on WSL2 Ubuntu 22.04
 
 **Check your environment:**
 
@@ -84,6 +63,28 @@ bash scripts/install-prereqs.sh
 ```
 
 `install-docker.sh` follows the official Docker Engine install path for Ubuntu. After it runs you must log out and back in (or `newgrp docker`) for group membership to take effect.
+
+---
+
+## Quick demo
+
+The fastest way to bring up the full environment and verify everything works:
+
+```bash
+make demo        # core workflow: app + MinIO + backup (~3-5 min)
+make demo-full   # full platform: adds Prometheus, Grafana, Loki (~10-15 min first run)
+```
+
+Both commands are idempotent — safe to run on an already-running cluster.
+
+**Why restore is not part of the demo:** Restore is a disruptive recovery operation. It scales the application to zero replicas and overwrites PVC data. It is not safe to run automatically as part of a demo sequence. To validate the restore path explicitly after the demo:
+
+```bash
+make backup            # ensure a recent snapshot exists
+make restore           # guided restore: suspend CronJob → scale down → restore → verify → scale up
+# or for a specific snapshot:
+SNAPSHOT=abc12345 make restore
+```
 
 ---
 

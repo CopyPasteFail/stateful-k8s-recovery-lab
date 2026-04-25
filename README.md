@@ -31,7 +31,7 @@ Run `make check-prereqs` to verify your environment. Run `make install-prereqs` 
 ## Quickstart
 
 ```bash
-git clone https://github.com/your-org/stateful-k8s-recovery-lab.git
+git clone https://github.com/CopyPasteFail/stateful-k8s-recovery-lab.git
 cd stateful-k8s-recovery-lab
 
 make demo       # app + MinIO + backup — the core workflow (~3-5 min)

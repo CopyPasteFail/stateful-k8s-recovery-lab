@@ -51,7 +51,7 @@ This document records the key design decisions made in `stateful-k8s-recovery-la
 **Rationale:**
 - **Incremental by default:** Restic uses content-defined chunking and deduplication. After the first full backup, subsequent runs transfer only changed chunks. This is critical for 2 TB datasets on a 6-hour interval.
 - **Encryption:** The repository is encrypted before any data leaves the pod. MinIO holds only ciphertext.
-- **Integrity verification:** `restic check` verifies the repository index. The backup Job runs this after every snapshot.
+- **Integrity verification:** Restic supports `restic check` to verify the repository index. The local demo backup Job does not run `restic check` after every snapshot — production deployments should schedule periodic integrity checks and retention pruning (`restic forget --prune`) separately from the six-hour backup path.
 - **Point-in-time restores:** Restic keeps multiple snapshots. Operators can restore to any snapshot, not just the latest.
 
 **Alternative considered:** Velero — a Kubernetes-native backup tool. Velero is appropriate for cluster-level backups (namespaces, resources). It is not designed for application-level data backup of a file directory. Restic is the better tool when the unit of backup is a directory.
