@@ -127,6 +127,8 @@ This requires:
 
 Using a CSI volume snapshot is the preferred production path on managed Kubernetes. The CSI driver creates the snapshot; Restic reads from the snapshot's bound PVC.
 
+For concrete examples of both paths — including a parameterized LVM script and CSI manifest — see [docs/production-snapshots.md](production-snapshots.md).
+
 ---
 
 ## Backup operator procedure

@@ -12,7 +12,7 @@ This document describes the monitoring, alerting, logging, and dashboarding setu
 | Grafana | Bundled with `kube-prometheus-stack` | `observability` | Dashboards, log visualization |
 | Alertmanager | Bundled with `kube-prometheus-stack` | `observability` | Alert routing and deduplication |
 | Loki | `grafana/loki` (SingleBinary mode) | `observability` | Log aggregation |
-| Promtail | `grafana/promtail` | `observability` | DaemonSet log shipper (pod logs → Loki) |
+| Alloy | `grafana/alloy` | `observability` | DaemonSet log collector (pod logs → Loki) |
 
 Helm values files live in `helm-values/`. Deploy the full stack with:
 
@@ -109,6 +109,22 @@ Alert rules are defined in `charts/leveldb-app/templates/prometheusrule.yaml` an
 - **LevelDBBackupJobFailed** fires immediately when any backup Job records a failure in its status.
 - **LevelDBBackupNotRunRecently** fires when no backup Job has completed successfully in the last 8 hours, or when no completion timestamp exists at all (first deploy or all jobs purged).
 
+### Storage alerts
+
+These rules use kubelet volume stats and kube-state-metrics (both bundled with `kube-prometheus-stack`) — no custom exporter is required. The PVC name `data-leveldb-app-0` is rendered dynamically from the Helm release name at deploy time.
+
+| Alert | Expression | For | Severity |
+|---|---|---|---|
+| `LevelDBPVCUsageHigh` | `kubelet_volume_stats_used_bytes{persistentvolumeclaim="data-leveldb-app-0"} / kubelet_volume_stats_capacity_bytes{...} > 0.80` | 15m | warning |
+| `LevelDBPVCUsageCritical` | `kubelet_volume_stats_used_bytes{persistentvolumeclaim="data-leveldb-app-0"} / kubelet_volume_stats_capacity_bytes{...} > 0.90` | 5m | critical |
+| `LevelDBPVCInodesLow` | `kubelet_volume_stats_inodes_free{persistentvolumeclaim="data-leveldb-app-0"} / kubelet_volume_stats_inodes{...} < 0.10` | 15m | warning |
+| `LevelDBPVCPending` | `kube_persistentvolumeclaim_status_phase{persistentvolumeclaim="data-leveldb-app-0", phase="Bound"} == 0` | 5m | critical |
+
+- **LevelDBPVCUsageHigh** fires when the PVC has been more than 80% full for 15 minutes. Expand the PVC or prune data before it reaches the critical threshold.
+- **LevelDBPVCUsageCritical** fires when the PVC has been more than 90% full for 5 minutes. Immediate expansion is required to prevent LevelDB write failures.
+- **LevelDBPVCInodesLow** fires when fewer than 10% of inodes remain for 15 minutes. LevelDB creates many small SST files during compaction; inode exhaustion will cause write failures even when bytes remain available.
+- **LevelDBPVCPending** fires when the PVC is not in `Bound` phase for 5 minutes. The StatefulSet pod will remain `Pending` until the PVC is bound; check StorageClass provisioner logs or available capacity.
+
 ---
 
 ## Dashboard
@@ -134,7 +150,7 @@ Dashboard UID: `leveldb-app-overview`
 
 ## Log aggregation
 
-Promtail (deployed as a DaemonSet) tails pod logs from all nodes and ships them to Loki at:
+Alloy (deployed as a DaemonSet) collects pod logs via the Kubernetes API and ships them to Loki at:
 
 ```
 http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
@@ -230,9 +246,15 @@ The current Alertmanager UI state is also expected for the local demo:
 
 ## Troubleshooting
 
-### Promtail pod is CrashLoopBackOff with "too many open files"
+### Alloy pod is CrashLoopBackOff or not collecting logs
 
-Promtail's file target manager creates one inotify instance per watched directory. The Linux kernel default (`fs.inotify.max_user_instances=128`) is too low when running many pods on k3d / WSL2. Fix:
+Check pod logs first:
+
+```bash
+kubectl -n observability logs daemonset/alloy --tail=40
+```
+
+**`too many open files` / inotify limit exceeded** — Alloy's Kubernetes log discovery opens inotify watches. If `max_user_instances` is too low the pod crashes on start. Fix:
 
 ```bash
 # Apply immediately (lost on reboot)
@@ -244,16 +266,37 @@ echo 'fs.inotify.max_user_watches=524288' | sudo tee -a /etc/sysctl.d/99-k3d-ino
 sudo sysctl -p /etc/sysctl.d/99-k3d-inotify.conf
 
 # Delete the crashed pod so the DaemonSet recreates it with the new limit
-kubectl -n observability delete pod -l app.kubernetes.io/name=promtail
+kubectl -n observability delete pod -l app.kubernetes.io/name=alloy
 ```
 
 `make install-prereqs` writes this configuration automatically.
+
+**No logs appearing in Grafana / Loki** — verify Alloy is pushing to Loki:
+
+```bash
+kubectl -n observability port-forward svc/loki 3100:3100 &
+curl -s 'http://localhost:3100/loki/api/v1/labels' | jq .
+```
+
+If the `namespace` label is present, Loki is receiving data. If not, check that the Alloy config in `helm-values/alloy.yaml` uses the correct Loki push URL.
+
+### No data in Prometheus / metrics not appearing
+
+Verify the ServiceMonitor exists and Prometheus has picked it up:
+
+```bash
+kubectl -n leveldb-system get servicemonitor
+kubectl -n observability port-forward svc/prometheus-operated 9090:9090 &
+# Then open http://localhost:9090/targets
+```
+
+If the `leveldb-app` target is missing, ensure `MONITORING=1 make deploy` was run after `make deploy-observability`. Without `MONITORING=1`, the ServiceMonitor and PrometheusRule are not created.
 
 ---
 
 ## Observability for the restore workflow
 
-The restore script (`scripts/restore.sh`) emits structured log output to stdout that Promtail captures and ships to Loki. After a restore, inspect what happened with:
+The restore script (`scripts/restore.sh`) emits structured log output to stdout that Alloy collects and ships to Loki. After a restore, inspect what happened with:
 
 ```logql
 {namespace="leveldb-system", app_kubernetes_io_component="restore"}

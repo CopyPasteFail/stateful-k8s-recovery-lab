@@ -1,0 +1,59 @@
+# CSI VolumeSnapshot example — production backup consistency boundary
+#
+# This is an example only. The local demo does not use these manifests.
+#
+# Prerequisites:
+#   - A CSI driver that supports the VolumeSnapshot API
+#     (e.g., AWS EBS CSI driver, GCP PD CSI driver, Azure Disk CSI driver, Longhorn)
+#   - A VolumeSnapshotClass configured for your driver.
+#     No VolumeSnapshotClass is provided here because the name, driver, and
+#     parameters are provider-specific and cannot be made generic.
+#     Replace "your-snapshot-class" below with the actual class name in your cluster.
+#     Run: kubectl get volumesnapshotclasses   to see what is available.
+#   - The VolumeSnapshot API CRDs installed
+#     (part of the external-snapshotter project: https://github.com/kubernetes-csi/external-snapshotter)
+#
+# Flow:
+#   1. Apply VolumeSnapshot → wait for readyToUse: true
+#   2. Apply restore PVC → wait for Bound
+#   3. Run the Restic backup Job mounting the restore PVC read-only
+#   4. Delete the restore PVC and VolumeSnapshot after backup completes
+#
+# See docs/production-snapshots.md for the full workflow and path selection guidance.
+
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: leveldb-app-backup-snap
+  namespace: leveldb-system
+  labels:
+    app.kubernetes.io/name: leveldb-app
+    app.kubernetes.io/component: backup
+spec:
+  volumeSnapshotClassName: your-snapshot-class   # replace with your VolumeSnapshotClass name
+  source:
+    persistentVolumeClaimName: data-leveldb-app-0
+
+---
+# Restore-mode PVC — mounts the snapshot as a read-only backup source for Restic.
+# Create this after the VolumeSnapshot above reaches readyToUse: true.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: leveldb-app-backup-snap-pvc
+  namespace: leveldb-system
+  labels:
+    app.kubernetes.io/name: leveldb-app
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadOnlyMany        # or ReadWriteOnce if ReadOnlyMany is not supported by your driver
+  storageClassName: your-storage-class           # replace with your StorageClass name
+  resources:
+    requests:
+      storage: 10Gi       # match or exceed the source PVC size
+  dataSource:
+    name: leveldb-app-backup-snap
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io

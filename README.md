@@ -68,6 +68,8 @@ curl         http://localhost:18081/healthz
 curl         http://localhost:18081/metrics
 ```
 
+A CI workflow (`.github/workflows/ci.yml`) runs these same Go tests on every push and pull request, along with ShellCheck on all shell scripts and `helm lint` / `helm template` on the chart — no cluster required.
+
 ---
 
 ## Backup and restore workflow
@@ -79,6 +81,7 @@ make suspend-backups     # pause the CronJob (maintenance window)
 make resume-backups      # re-enable the CronJob
 
 make restore             # guided restore: scale down, restore snapshot, scale up
+make restore-drill       # end-to-end drill: write keys, backup, corrupt, restore, verify
 ```
 
 The backup CronJob runs every 6 hours (`0 */6 * * *`, `concurrencyPolicy: Forbid`).
@@ -142,7 +145,7 @@ stateful-k8s-recovery-lab/
 │   ├── minio.yaml                   # MinIO standalone (local demo, ClusterIP, 5Gi)
 │   ├── kube-prometheus-stack.yaml   # Prometheus + Grafana + Alertmanager
 │   ├── loki.yaml                    # Loki SingleBinary (filesystem storage)
-│   └── promtail.yaml                # Promtail DaemonSet (log shipper)
+│   └── alloy.yaml                   # Alloy DaemonSet (log collector)
 ├── app/                   # Go HTTP service source
 │   └── ...
 └── docs/

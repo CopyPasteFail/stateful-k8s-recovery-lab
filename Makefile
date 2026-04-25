@@ -6,7 +6,7 @@
 .PHONY: help check-prereqs install-prereqs install-docker \
         bootstrap deploy deploy-minio deploy-observability \
         seed-data smoke-test \
-        backup backup-status suspend-backups resume-backups restore \
+        backup backup-status suspend-backups resume-backups restore restore-drill \
         logs status port-forward port-forward-all port-forward-stop \
         destroy \
         test-app run-app-local \
@@ -89,6 +89,9 @@ resume-backups: ## Resume the backup CronJob (re-enables scheduled backups)
 
 restore: ## Run the guided restore: scale down, restore snapshot, verify, scale up
 	@bash scripts/restore.sh
+
+restore-drill: ## Prove backup + restore end to end: write keys, backup, corrupt, restore, verify
+	@bash scripts/restore-drill.sh
 
 ##@ Operate
 

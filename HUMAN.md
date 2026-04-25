@@ -22,6 +22,25 @@ The rest of this file explains what to run, what healthy looks like, and what ea
 
 ---
 
+## System coverage map
+
+| Operational concern | Where to look | Notes |
+|---|---|---|
+| Stateful workload deployment | `charts/leveldb-app/` | Helm chart defining the StatefulSet, PVC, and service |
+| Persistent storage | `charts/leveldb-app/`, [docs/architecture.md](docs/architecture.md) | PVC provisioning, storage class, and volume mount config |
+| Backup schedule and RPO | [docs/backup-restore.md](docs/backup-restore.md) | CronJob schedule; RPO target is six hours |
+| Restore procedure | [docs/backup-restore.md](docs/backup-restore.md) | Full restore walkthrough including failure-handling steps |
+| Backup consistency boundary | [docs/backup-restore.md](docs/backup-restore.md), [docs/tradeoffs.md](docs/tradeoffs.md), [docs/production-snapshots.md](docs/production-snapshots.md) | Live-PVC backup in local demo; production path requires CSI or LVM snapshots — see production-snapshots.md for concrete examples |
+| Scaling model | [docs/tradeoffs.md](docs/tradeoffs.md) | Single-writer LevelDB constraint; horizontal write scaling is not supported |
+| Migration and upgrades | [docs/migration.md](docs/migration.md) | Schema and version migration steps |
+| Monitoring and dashboards | [docs/observability.md](docs/observability.md) | Prometheus scrape config and Grafana dashboard definitions |
+| Alerting | [docs/observability.md](docs/observability.md) | PrometheusRule definitions and Alertmanager configuration |
+| Logs and troubleshooting | [docs/observability.md](docs/observability.md), `scripts/logs.sh` | Loki/Alloy pipeline; `make logs` for quick pod log access |
+| Security hardening | [docs/tradeoffs.md](docs/tradeoffs.md) | Local demo credential model and production secret management notes |
+| Local demo lifecycle | `Makefile`, `scripts/` | `make demo-full` to bring up, `make destroy` to tear down |
+
+---
+
 ## Quick Setup and Teardown Flow
 
 ### Prequisites Verification and Installation
@@ -68,12 +87,16 @@ make port-forward-all
 make port-forward-stop
 ```
 
-### Restore a Backup
+```
 
-Restore is intentionally not part of the full demo flow.
+### Verify Backup and Restore End to End
+
+`make restore-drill` runs a self-contained backup-and-restore cycle. It writes known keys to the app, takes a backup, overwrites those keys with different values, runs a full restore, and verifies that the original values are recovered. The command prints `PASSED` or `FAILED` at the end.
+
+This is opt-in and separate from the main demo. It scales the app down and up as part of the restore step, so run it when no other operations are in progress.
 
 ```bash
-make restore
+make restore-drill
 ```
 
 ### Clean Up
@@ -87,7 +110,7 @@ make destroy FORCE=1
 - creates the `leveldb-system`, `minio-system`, and `observability` namespaces
 - deploys MinIO
 - deploys the app
-- deploys Prometheus, Grafana, Alertmanager, Loki, and Promtail
+- deploys Prometheus, Grafana, Alertmanager, Loki, and Alloy
 - seeds sample data
 - runs a backup
 - runs the smoke test
@@ -204,7 +227,7 @@ Read more in [docs/backup-restore.md](docs/backup-restore.md).
 
 ### Observability
 
-The observability stack is Prometheus, Grafana, Alertmanager, Loki, and Promtail.
+The observability stack is Prometheus, Grafana, Alertmanager, Loki, and Alloy.
 
 When it is healthy, Prometheus scrapes the app, Grafana has the app overview dashboard, and Loki receives pod logs.
 

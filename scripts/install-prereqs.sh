@@ -101,11 +101,10 @@ _ver helm      helm version --short
 _ver k3d       k3d version
 _ver restic    restic version
 
-# ── inotify limits (required by Promtail on k3d / WSL2) ─────────────────────
-# Promtail's file target manager creates one inotify instance per watched
-# directory. The kernel default (128) is too low for a node running many pods.
-# This persists the limits across reboots via /etc/sysctl.d/.
-printf '\n=== inotify limits (Promtail / k3d) ===\n'
+# ── inotify limits (k3d / WSL2) ──────────────────────────────────────────────
+# The kernel default (128 max_user_instances) is too low for a node running
+# many pods with inotify watches. This persists the limits across reboots.
+printf '\n=== inotify limits (k3d / WSL2) ===\n'
 SYSCTL_CONF="/etc/sysctl.d/99-k3d-inotify.conf"
 if [[ -f "${SYSCTL_CONF}" ]]; then
     printf '  Already configured: %s\n' "${SYSCTL_CONF}"

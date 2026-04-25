@@ -4,7 +4,7 @@
 # Installs (or upgrades) three Helm releases into the 'observability' namespace:
 #   kube-prometheus-stack  — Prometheus, Grafana, Alertmanager, kube-state-metrics
 #   loki                   — Log aggregation (SingleBinary mode, filesystem storage)
-#   promtail               — Log shipper DaemonSet (tails pod logs → Loki)
+#   alloy                  — Log collector DaemonSet (pod logs → Loki)
 #
 # Usage:
 #   make deploy-observability
@@ -25,24 +25,24 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Helm release names
 RELEASE_PROM_STACK="kube-prometheus-stack"
 RELEASE_LOKI="loki"
-RELEASE_PROMTAIL="promtail"
+RELEASE_ALLOY="alloy"
 
 # Helm chart references
 CHART_PROM_STACK="prometheus-community/kube-prometheus-stack"
 CHART_LOKI="grafana/loki"
-CHART_PROMTAIL="grafana/promtail"
+CHART_ALLOY="grafana/alloy"
 
 # Values files
 VALUES_PROM_STACK="${REPO_ROOT}/helm-values/kube-prometheus-stack.yaml"
 VALUES_LOKI="${REPO_ROOT}/helm-values/loki.yaml"
-VALUES_PROMTAIL="${REPO_ROOT}/helm-values/promtail.yaml"
+VALUES_ALLOY="${REPO_ROOT}/helm-values/alloy.yaml"
 
 # Timeouts
 WAIT_OPERATOR=180   # seconds — Prometheus operator deployment
 WAIT_GRAFANA=180    # seconds — Grafana deployment
 WAIT_PROMETHEUS=300 # seconds — Prometheus StatefulSet (large image pull)
 WAIT_LOKI=120       # seconds — Loki StatefulSet
-WAIT_PROMTAIL=120   # seconds — Promtail DaemonSet
+WAIT_ALLOY=120      # seconds — Alloy DaemonSet
 
 require kubectl
 require helm
@@ -109,18 +109,18 @@ helm upgrade --install "${RELEASE_LOKI}" "${CHART_LOKI}" \
     --wait
 ok "Release '${RELEASE_LOKI}' deployed"
 
-# ── Promtail ──────────────────────────────────────────────────────────────────
+# ── Alloy ─────────────────────────────────────────────────────────────────────
 
-section "Promtail"
+section "Alloy"
 
-info "Running: helm upgrade --install ${RELEASE_PROMTAIL} ${CHART_PROMTAIL} ..."
-helm upgrade --install "${RELEASE_PROMTAIL}" "${CHART_PROMTAIL}" \
+info "Running: helm upgrade --install ${RELEASE_ALLOY} ${CHART_ALLOY} ..."
+helm upgrade --install "${RELEASE_ALLOY}" "${CHART_ALLOY}" \
     --namespace "${NS_OBSERVABILITY}" \
-    --values "${VALUES_PROMTAIL}" \
+    --values "${VALUES_ALLOY}" \
     --timeout 5m \
     --atomic \
     --wait
-ok "Release '${RELEASE_PROMTAIL}' deployed"
+ok "Release '${RELEASE_ALLOY}' deployed"
 
 # ── Rollout verification ──────────────────────────────────────────────────────
 
@@ -151,11 +151,11 @@ kubectl rollout status statefulset/"${RELEASE_LOKI}" \
     -n "${NS_OBSERVABILITY}" --timeout="${WAIT_LOKI}s"
 ok "Loki is ready"
 
-# Promtail DaemonSet
-info "Waiting for Promtail DaemonSet (timeout: ${WAIT_PROMTAIL}s) ..."
-kubectl rollout status daemonset/"${RELEASE_PROMTAIL}" \
-    -n "${NS_OBSERVABILITY}" --timeout="${WAIT_PROMTAIL}s"
-ok "Promtail is ready"
+# Alloy DaemonSet
+info "Waiting for Alloy DaemonSet (timeout: ${WAIT_ALLOY}s) ..."
+kubectl rollout status daemonset/"${RELEASE_ALLOY}" \
+    -n "${NS_OBSERVABILITY}" --timeout="${WAIT_ALLOY}s"
+ok "Alloy is ready"
 
 # ── Grafana admin password ────────────────────────────────────────────────────
 

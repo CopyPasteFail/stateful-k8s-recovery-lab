@@ -31,12 +31,12 @@ The system consists of four layers:
 | `restic` bucket | MinIO | Object bucket | Stores encrypted Restic repository data |
 | `kube-prometheus-stack` | `observability` | Helm release | Installs Prometheus, Grafana, Alertmanager, and CRDs |
 | `loki` | `observability` | Helm release | Stores Kubernetes logs |
-| `promtail` | `observability` | Helm release | Collects pod logs and sends them to Loki |
+| `alloy` | `observability` | Helm release | Collects pod logs and sends them to Loki |
 | `ServiceMonitor` | `leveldb-system` | Prometheus Operator CRD | Tells Prometheus to scrape `/metrics` from the app |
 | `PrometheusRule` | `leveldb-system` | Prometheus Operator CRD | Defines app and backup alerts |
 | `Makefile` | repo root | Operator interface | Human-friendly command entry point |
 | `scripts/*.sh` | repo root | Shell automation | Idempotent lifecycle, deploy, backup, restore, and diagnostics |
-| `helm-values/*` | repo root | Helm values | Local values for MinIO, Prometheus stack, Loki, and Promtail |
+| `helm-values/*` | repo root | Helm values | Local values for MinIO, Prometheus stack, Loki, and Alloy |
 
 ---
 
@@ -116,7 +116,7 @@ Restic provides encryption, deduplication, and incremental snapshots. The Restic
 
 The CronJob runs every six hours (`concurrencyPolicy: Forbid`). For the schedule, concurrency behavior, stable host identity, and retention policy see [backup-restore.md — Backup design](backup-restore.md#backup-design). For the design rationale see [tradeoffs.md — CronJob for scheduled backups](tradeoffs.md#cronjob).
 
-In the local POC, Restic reads the live-mounted LevelDB directory. Production should use LVM or CSI volume snapshots for a crash-consistent source. See [backup-restore.md — Consistency boundary](backup-restore.md#consistency-boundary) and [tradeoffs.md — Backup consistency](tradeoffs.md#consistency).
+In the local POC, Restic reads the live-mounted LevelDB directory. Production should use LVM or CSI volume snapshots for a crash-consistent source. See [backup-restore.md — Consistency boundary](backup-restore.md#consistency-boundary), [tradeoffs.md — Backup consistency](tradeoffs.md#consistency), and [docs/production-snapshots.md](production-snapshots.md) for concrete examples.
 
 ### MinIO
 
@@ -146,7 +146,7 @@ LevelDB does not support concurrent writers. The following scaling options are s
 | Tenant partitioning | Each tenant gets its own StatefulSet+PVC | Multi-tenant use case |
 | Read replicas | Copy-on-write snapshot served by a second pod | Only if the application explicitly supports quiescent snapshots |
 
-Do not use HPA to scale this StatefulSet above one replica. LevelDB is single-writer; a second writer pod would contend on the database lock and may fail or risk corruption. The Helm chart intentionally does not expose a replica count for the write path. This is a chart-level guardrail only; production should enforce the invariant with an admission policy if needed. See [tradeoffs.md — Single writer per LevelDB dataset](tradeoffs.md#leveldb-scaling).
+Do not use HPA to scale this StatefulSet above one replica. LevelDB is single-writer; a second writer pod would contend on the database lock and may fail or risk corruption. The Helm chart values schema rejects any `replicaCount` other than `1` at render time. Production deployments should add an admission policy for defense-in-depth. See [tradeoffs.md — Single writer per LevelDB dataset](tradeoffs.md#leveldb-scaling).
 
 ---
 
@@ -216,7 +216,7 @@ See [backup-restore.md — RPO and RTO](backup-restore.md#rpo-and-rto) for the f
 |---|---|---|
 | Cluster | k3d (Docker) | Managed Kubernetes (EKS, GKE, AKS) or bare metal |
 | Object storage | MinIO in-cluster | S3, GCS, or Azure Blob |
-| Backup consistency | Live directory | LVM snapshot |
+| Backup consistency | Live directory | LVM snapshot or CSI VolumeSnapshot — see [production-snapshots.md](production-snapshots.md) |
 | Secrets | Kubernetes Secret from `.env` | External Secrets Operator + KMS |
 | Storage class | k3d default (local-path) | Cloud block storage with expansion support |
 | Dataset size | Megabytes (demo) | Up to 2 TB per pod |
@@ -244,7 +244,7 @@ See [backup-restore.md — RPO and RTO](backup-restore.md#rpo-and-rto) for the f
 | ServiceMonitor | Prometheus Operator resource that tells Prometheus how to scrape app metrics. |
 | PrometheusRule | Prometheus Operator resource that defines alerting rules. |
 | Loki | Log aggregation system used by Grafana to query Kubernetes logs. |
-| Promtail | Agent that collects pod logs and sends them to Loki. |
+| Alloy | Grafana Alloy collector that collects pod logs and sends them to Loki. |
 | HPA | HorizontalPodAutoscaler. Not safe for scaling one LevelDB dataset because it would create multiple writer pods. |
 | Shard-per-pod | Safe scaling model where each pod owns a different dataset or key range. |
 | Admission policy | Kubernetes policy that can reject unsafe changes, such as scaling the LevelDB StatefulSet above one replica. |

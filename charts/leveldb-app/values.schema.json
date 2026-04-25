@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "replicaCount": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Number of replicas for the write StatefulSet. Must be 1. LevelDB holds an exclusive file lock on its data directory; a second writer process will fail or corrupt data. Horizontal scaling requires the shard-per-pod model (a separate StatefulSet per key range), not replica count > 1."
+    }
+  }
+}

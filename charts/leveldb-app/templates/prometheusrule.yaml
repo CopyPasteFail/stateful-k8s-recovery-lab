@@ -103,4 +103,99 @@ spec:
               time is recorded). Check the CronJob status:
               kubectl get cronjob -n {{ .Release.Namespace }}
               make backup-status
+
+        # ── Storage / PVC health ────────────────────────────────────────────
+        # These rules use kubelet volume stats and kube-state-metrics, both
+        # bundled with kube-prometheus-stack. The PVC name follows the
+        # StatefulSet convention: <volumeClaimTemplate>-<release>-<ordinal>.
+
+        - alert: LevelDBPVCUsageHigh
+          expr: >-
+            kubelet_volume_stats_used_bytes{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            /
+            kubelet_volume_stats_capacity_bytes{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            > 0.80
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "LevelDB PVC usage above 80%"
+            description: >-
+              The PVC data-{{ include "leveldb-app.fullname" . }}-0 in namespace
+              {{ .Release.Namespace }} has been over 80% full for 15 minutes.
+              Consider expanding the PVC or pruning data before the disk fills.
+              Check: kubectl get pvc -n {{ .Release.Namespace }}
+
+        - alert: LevelDBPVCUsageCritical
+          expr: >-
+            kubelet_volume_stats_used_bytes{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            /
+            kubelet_volume_stats_capacity_bytes{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            > 0.90
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "LevelDB PVC usage above 90%"
+            description: >-
+              The PVC data-{{ include "leveldb-app.fullname" . }}-0 in namespace
+              {{ .Release.Namespace }} has been over 90% full for 5 minutes.
+              Expand the PVC immediately to prevent write failures.
+              Check: kubectl get pvc -n {{ .Release.Namespace }}
+
+        - alert: LevelDBPVCInodesLow
+          expr: >-
+            kubelet_volume_stats_inodes_free{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            /
+            kubelet_volume_stats_inodes{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0"
+            }
+            < 0.10
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "LevelDB PVC inode availability below 10%"
+            description: >-
+              Fewer than 10% of inodes remain on PVC
+              data-{{ include "leveldb-app.fullname" . }}-0 in namespace
+              {{ .Release.Namespace }} for 15 minutes. LevelDB SST file creation
+              will fail when inodes are exhausted. Check for compaction backlog
+              or unexpected small-file accumulation.
+
+        - alert: LevelDBPVCPending
+          # kube_persistentvolumeclaim_status_phase emits one series per phase
+          # with a 0/1 value. phase="Bound" == 0 means the PVC is not bound.
+          expr: >-
+            kube_persistentvolumeclaim_status_phase{
+              namespace="{{ .Release.Namespace }}",
+              persistentvolumeclaim="data-{{ include "leveldb-app.fullname" . }}-0",
+              phase="Bound"
+            } == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "LevelDB PVC is not Bound"
+            description: >-
+              PVC data-{{ include "leveldb-app.fullname" . }}-0 in namespace
+              {{ .Release.Namespace }} has not been in Bound phase for 5 minutes.
+              The pod will remain unscheduled until the PVC is bound.
+              Check: kubectl describe pvc data-{{ include "leveldb-app.fullname" . }}-0 -n {{ .Release.Namespace }}
 {{- end }}

@@ -27,7 +27,7 @@ This document records the key design decisions made in `stateful-k8s-recovery-la
 
 ## Single writer per LevelDB dataset {#leveldb-scaling}
 
-**Decision:** Lock the write StatefulSet to `replicas: 1` and do not expose a replica count setting for the write path.
+**Decision:** Lock the write StatefulSet to `replicas: 1`. The Helm chart values schema (`values.schema.json`) enforces this at render time: `helm template` and `helm install` will fail if `replicaCount` is set to any value other than `1`.
 
 **Rationale:** LevelDB uses an exclusive file lock (`LOCK`) on its data directory. A second process attempting to open the same directory for writing will either fail immediately or corrupt data depending on the OS and lock behavior. This is not a configuration limitation—it is a fundamental property of LevelDB's design.
 
@@ -97,6 +97,8 @@ This document records the key design decisions made in `stateful-k8s-recovery-la
 LVM snapshots are near-instantaneous, do not require stopping the application, and provide a crash-consistent point in time. The backup Job applies the snapshot, mount, backup, unmount, delete snapshot sequence. This is the right model for production.
 
 CSI volume snapshots are the cloud-native equivalent of LVM snapshots and are preferred on managed Kubernetes where the CSI driver supports them.
+
+For a concrete LVM example script and CSI manifests, see [docs/production-snapshots.md](production-snapshots.md).
 
 ---
 

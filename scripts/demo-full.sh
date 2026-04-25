@@ -8,7 +8,7 @@
 #   status
 #
 # Expect ~10-15 minutes on first run due to image pulls for Prometheus,
-# Grafana, Loki, and Promtail. Subsequent runs are faster (images cached).
+# Grafana, Loki, and Alloy. Subsequent runs are faster (images cached).
 #
 # Restore is intentionally excluded: it is a disruptive recovery operation
 # that does not belong in an automated demo. To validate the restore path:
