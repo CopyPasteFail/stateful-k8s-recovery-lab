@@ -126,12 +126,16 @@ For production:
 
 ## NetworkPolicies as production hardening {#networkpolicy}
 
-**Decision:** The chart ships an optional `NetworkPolicy` template, disabled by default. Local POC clusters (k3d without Calico or Cilium) do not enforce NetworkPolicy; enabling it there has no effect. Enable for production hardening.
+**Decision:** The chart ships an optional `NetworkPolicy` template, intentionally disabled by default. The local POC does not depend on network isolation — the demo proves the backup/restore and observability flow, not a full production network isolation model.
 
-**Rationale:** k3d does not ship a NetworkPolicy controller by default. Applying NetworkPolicies without enforcement gives a false sense of security. In production (with a CNI that enforces NetworkPolicies, such as Calico or Cilium), apply:
-- `leveldb-system` pods: ingress from `observability` (Prometheus scrape) only; no egress except to MinIO
+**Tradeoff:** Disabling NetworkPolicy by default keeps the demo portable and avoids brittle environment-specific selectors breaking Prometheus scraping or local workflows. Enabling it imposes a safer production posture but requires validating every traffic path against the actual CNI, namespace layout, pod labels, and endpoints.
+
+**Rationale:** k3d/k3s can enforce NetworkPolicy depending on the CNI in use (e.g., kube-router behavior in k3s, or Calico/Cilium when installed). Whether enforcement is active depends on the specific cluster configuration. Applying NetworkPolicies without a CNI that enforces them gives a false sense of security; applying them with wrong selectors can silently break scraping or egress. In production (with a CNI that enforces NetworkPolicies), enable the template and adapt it to the actual cluster:
+- `leveldb-system` pods: ingress from `observability` namespace (Prometheus scrape) only; egress to MinIO only
 - `backup` Jobs: egress to MinIO only
 - `minio-system` pods: ingress from `leveldb-system` namespace only
+- DNS egress (port 53 UDP/TCP) must be explicitly allowed if the policy uses `policyTypes: Egress`
+- Object-store/backup egress CIDRs must match the actual MinIO or cloud storage endpoint
 
 ---
 

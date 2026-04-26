@@ -286,6 +286,7 @@ Read more in [docs/tradeoffs.md](docs/tradeoffs.md).
 - The recovery point objective is six hours. The recovery time objective depends on restore throughput and the size of the dataset.
 - LevelDB is a single-writer store. Do not treat it like a horizontally writable replicated database.
 - Terraform is not part of the local demo flow.
+- NetworkPolicy is present as a production-readiness example, not as a dependency of the local demo. k3d/k3s may enforce NetworkPolicy depending on networking configuration, but the POC avoids relying on environment-specific policy behavior.
 
 Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
 
