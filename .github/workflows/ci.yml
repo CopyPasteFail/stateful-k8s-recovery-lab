@@ -11,12 +11,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
 
       - name: Run Go tests
         working-directory: app
@@ -28,10 +29,14 @@ jobs:
       - name: Run ShellCheck
         run: shellcheck -x scripts/*.sh scripts/lib/*.sh scripts/examples/*.sh
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4.3.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Helm
+        env:
+          HELM_VERSION: v3.20.1
+        run: |
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm
+          helm version
 
       - name: Helm lint
         run: helm lint charts/leveldb-app
