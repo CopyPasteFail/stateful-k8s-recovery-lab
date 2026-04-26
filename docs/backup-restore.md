@@ -33,7 +33,7 @@ This document covers the backup and restore design, the operator procedures, and
 
 **RPO — Recovery Point Objective:** The maximum age of the most recent recoverable backup.
 
-This system targets a **six-hour RPO**. The backup CronJob fires every six hours. If a CronJob run fails, the Prometheus alert `LevelDBBackupNotRunRecently` fires after eight hours (2x the interval), giving one retry window before alerting.
+This system targets a **six-hour RPO**. The backup CronJob fires every six hours. The Prometheus alert `LevelDBBackupNotRunRecently` fires after eight hours, giving a two-hour grace period beyond the six-hour RPO target before paging.
 
 An RPO of six hours means: in the worst case, a full system failure immediately before a scheduled backup would lose up to six hours of writes.
 

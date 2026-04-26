@@ -196,7 +196,48 @@ Operator: make restore
 | App service account | No cluster-wide RBAC; namespace-scoped only |
 | Backup Job service account | Permission to read/write Secrets (for Restic password) only |
 | Container users | Non-root for all containers (UID 1000 for both app and backup) |
-| Network | NetworkPolicies restrict inter-namespace traffic (production hardening) |
+| Network | Optional NetworkPolicy restricts ingress/egress per pod (production hardening, disabled by default) |
+
+---
+
+## NetworkPolicy
+
+The chart ships an optional `NetworkPolicy` template, disabled by default.
+
+Local clusters (k3d, kind without Calico or Cilium) typically do not enforce NetworkPolicy, so enabling it there has no effect and may cause confusion. The default keeps the local POC easy to run without a CNI that enforces policy.
+
+**Enable for production hardening:**
+
+```yaml
+networkPolicy:
+  enabled: true
+  ingress:
+    allowSameNamespace: true
+    allowPrometheusNamespaceSelector:
+      kubernetes.io/metadata.name: observability   # adapt to your Prometheus namespace
+    allowPrometheusPodSelector:
+      app.kubernetes.io/name: prometheus
+  egress:
+    dns:
+      enabled: true
+    objectStore:
+      enabled: true
+      ports: [9000]                # add 443 for HTTPS S3 endpoints
+      ipBlocks: []                 # set CIDRs to restrict to specific S3/MinIO endpoints
+```
+
+**What the policy enforces when enabled:**
+
+| Direction | Traffic | Rule |
+|---|---|---|
+| Ingress | HTTP API and `/metrics` from same namespace | `podSelector: {}` on `service.port` |
+| Ingress | Prometheus scraping from observability namespace | `namespaceSelector` + optional `podSelector` on `service.port` |
+| Egress | DNS (kube-dns / CoreDNS) | Port 53 UDP and TCP, any destination |
+| Egress | Object store (Restic backups) | Configured ports; any IP by default, restrict with `ipBlocks` |
+
+The app serves both the HTTP API and `/metrics` on the same port (`service.port`), so a single ingress rule covers both API clients and Prometheus scraping.
+
+Exact selectors, CIDRs, and ports must be adapted to the target cluster and CNI. Test policy enforcement with `kubectl exec` or a network policy validation tool before relying on it for security isolation.
 
 ---
 

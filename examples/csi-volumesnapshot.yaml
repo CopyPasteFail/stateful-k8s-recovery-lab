@@ -33,6 +33,9 @@ metadata:
 spec:
   volumeSnapshotClassName: your-snapshot-class   # replace with your VolumeSnapshotClass name
   source:
+    # StatefulSet PVC names follow the pattern: <volumeClaimTemplate.name>-<statefulset.name>-<ordinal>
+    # For a StatefulSet named "leveldb-app" with volumeClaimTemplate named "data", pod 0 → data-leveldb-app-0
+    # Verify with: kubectl get pvc -n leveldb-system
     persistentVolumeClaimName: data-leveldb-app-0
 
 ---

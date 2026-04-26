@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.22
 FROM golang:${GO_VERSION}-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./

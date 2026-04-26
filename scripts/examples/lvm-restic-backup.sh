@@ -13,6 +13,11 @@
 #
 # Verify VG_NAME, LV_NAME, and MOUNT_POINT for your environment before running.
 # Do NOT run this script in the local demo — it is for production nodes only.
+#
+# NODE PLACEMENT: this script must run on the specific node that owns the LVM
+# logical volume backing the PVC. Use nodeName or nodeAffinity on the backup Job
+# to pin it to the correct node. Running on the wrong node will fail at lvcreate
+# because the LV will not be visible.
 # =============================================================================
 
 set -euo pipefail
@@ -78,6 +83,14 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
+
+# OPTIONAL QUIESCE: LevelDB's WAL means the database can recover from a
+# crash-consistent snapshot, so a hard quiesce is not strictly required.
+# However, if the application exposes a checkpoint or flush endpoint, triggering
+# it here reduces the number of WAL entries that need replaying on restore.
+# Example (adapt to your app's health/admin API):
+#   kubectl exec -n leveldb-system leveldb-app-0 -- /bin/leveldb-checkpoint || true
+# Leave commented out unless your application supports it.
 
 echo "[lvm-restic-backup] creating mount directory: ${MOUNT_POINT}"
 mkdir -p "${MOUNT_POINT}"

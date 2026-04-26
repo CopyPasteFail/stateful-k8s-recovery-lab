@@ -1,0 +1,65 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "leveldb-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "leveldb-app.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "leveldb-app.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if .Values.networkPolicy.ingress.allowSameNamespace }}
+    # Allow API clients and healthchecks from pods in the same namespace.
+    - from:
+        - podSelector: {}
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+    {{- end }}
+    {{- if or .Values.networkPolicy.ingress.allowPrometheusNamespaceSelector .Values.networkPolicy.ingress.allowPrometheusPodSelector }}
+    # Allow Prometheus scraping on the same port (/metrics is served on service.port).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingress.allowPrometheusNamespaceSelector | nindent 14 }}
+          {{- if .Values.networkPolicy.ingress.allowPrometheusPodSelector }}
+          podSelector:
+            matchLabels:
+              {{- toYaml .Values.networkPolicy.ingress.allowPrometheusPodSelector | nindent 14 }}
+          {{- end }}
+      ports:
+        - port: {{ .Values.service.port }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.egress.dns.enabled }}
+    # Allow DNS resolution via kube-dns / CoreDNS.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.objectStore.enabled }}
+    # Allow egress to object storage for Restic backups.
+    # ipBlocks is empty by default (any destination); set CIDRs to restrict in production.
+    - ports:
+        {{- range .Values.networkPolicy.egress.objectStore.ports }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+      {{- if .Values.networkPolicy.egress.objectStore.ipBlocks }}
+      to:
+        {{- range .Values.networkPolicy.egress.objectStore.ipBlocks }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+{{- end }}

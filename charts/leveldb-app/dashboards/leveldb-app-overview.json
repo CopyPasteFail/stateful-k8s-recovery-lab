@@ -50,8 +50,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (method, status) (rate(http_requests_total{job=\"leveldb-app\"}[2m]))",
-          "legendFormat": "{{method}} {{status}}",
+          "expr": "sum by (method, status_code) (rate(http_requests_total{job=\"leveldb-app\"}[2m]))",
+          "legendFormat": "{{method}} {{status_code}}",
           "refId": "A"
         }
       ]
@@ -269,7 +269,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "100 * sum(rate(http_requests_total{job=\"leveldb-app\",status=~\"5..\"}[2m])) / sum(rate(http_requests_total{job=\"leveldb-app\"}[2m]))",
+          "expr": "100 * sum(rate(http_requests_total{job=\"leveldb-app\",status_code=~\"5..\"}[2m])) / sum(rate(http_requests_total{job=\"leveldb-app\"}[2m]))",
           "legendFormat": "5xx %",
           "refId": "A"
         }
@@ -296,7 +296,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "expr": "rate(leveldb_errors_total{job=\"leveldb-app\"}[2m])",
-          "legendFormat": "{{type}}",
+          "legendFormat": "{{operation}}",
           "refId": "A"
         }
       ]

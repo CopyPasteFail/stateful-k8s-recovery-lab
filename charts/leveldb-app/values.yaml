@@ -145,6 +145,49 @@ monitoring:
     # with grafana.sidecar.dashboards.enabled=true).
     enabled: false
 
+# NetworkPolicy restricts ingress and egress traffic for the app pod.
+# Disabled by default: most local clusters (k3d, kind without Calico/Cilium) do not
+# enforce NetworkPolicy, and enabling it there has no effect or may cause confusion.
+# Enable in production to harden the network boundary.
+#
+# Note: the app serves both the HTTP API and the /metrics endpoint on the same port
+# (service.port). There is no separate metrics port; a single ingress rule covers both.
+networkPolicy:
+  enabled: false
+
+  ingress:
+    # Allow traffic from any pod in the same namespace (e.g. in-cluster API clients
+    # and curl-based healthchecks from other workloads in the same namespace).
+    allowSameNamespace: true
+
+    # Allow Prometheus scraping from a specific namespace.
+    # Set to the namespace label of your Prometheus installation.
+    # Example: {kubernetes.io/metadata.name: observability}
+    allowPrometheusNamespaceSelector: {}
+
+    # Further restrict to specific Prometheus pods within the namespace above.
+    # Combine with allowPrometheusNamespaceSelector for an AND rule.
+    # Example: {app.kubernetes.io/name: prometheus}
+    allowPrometheusPodSelector: {}
+
+  egress:
+    dns:
+      # Allow DNS resolution via kube-dns / CoreDNS on port 53 (UDP and TCP).
+      # Required for the app to resolve in-cluster service names.
+      enabled: true
+
+    objectStore:
+      # Allow egress to the object store used by Restic backups.
+      # By default permits any destination on the listed ports so it works with
+      # both in-cluster MinIO and external S3-compatible endpoints.
+      # Set ipBlocks to restrict to specific CIDRs in production.
+      enabled: true
+      ports:
+        - 9000
+      # Optional CIDR allowlist. Empty means any destination IP is permitted.
+      # Example: ["10.0.1.0/24", "192.168.10.5/32"]
+      ipBlocks: []
+
 probes:
   liveness:
     path: /healthz

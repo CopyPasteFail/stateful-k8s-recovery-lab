@@ -84,6 +84,34 @@ CSI snapshots are created at the storage-provider level and do not require privi
 
 ---
 
+## RPO, RTO, and operational requirements
+
+### RPO (Recovery Point Objective)
+
+Both LVM and CSI snapshot approaches share the same RPO characteristic: the snapshot captures a point in time, and all writes after that point are lost in a disaster. RPO is therefore bounded by backup frequency, not by snapshot creation time. For LevelDB, any WAL entries that had not been flushed to SST files at snapshot time must replay on restore — this is expected and handled by normal LevelDB recovery, but the window of un-replayed writes contributes to recovery time.
+
+A typical production schedule: snapshot every 1–4 hours, with Restic's deduplication keeping storage overhead low between runs.
+
+### RTO (Recovery Time Objective)
+
+| Step | LVM path | CSI path |
+|---|---|---|
+| Snapshot creation | Milliseconds | Seconds (provider-dependent) |
+| Restore PVC provisioning | N/A (direct mount) | Minutes (clone from snapshot) |
+| Restic restore to new PVC | Minutes–hours (data size) | Minutes–hours (data size) |
+| LevelDB WAL replay on pod start | Seconds–minutes | Seconds–minutes |
+
+RTO is dominated by Restic restore transfer time. Pre-provisioning a warm standby or using a CSI clone (rather than a Restic restore) reduces RTO at higher storage cost.
+
+### Operational requirements checklist
+
+- **Permissions:** LVM path requires `CAP_SYS_ADMIN` or root plus a host `/dev` volume mount. CSI path requires RBAC to create/delete `VolumeSnapshot` and `PersistentVolumeClaim` objects.
+- **Node affinity:** LVM path requires the backup Job to run on the same node as the PVC; enforce with `nodeName` or `nodeAffinity`.
+- **Snapshot retention:** neither path manages retention automatically. LVM snapshots must be `lvremove`d after use. CSI snapshots persist until explicitly deleted. Build retention into your backup controller or add a cleanup Job; unmanaged snapshots consume storage and quota.
+- **Restore testing:** treat an untested backup as no backup. Schedule a quarterly or per-release restore drill: restore to a fresh namespace, start the app, and verify data integrity. Document the expected WAL replay behavior so the on-call team is not surprised by startup latency after a restore.
+
+---
+
 ## Choosing between the two paths
 
 | Concern | LVM snapshot | CSI VolumeSnapshot |

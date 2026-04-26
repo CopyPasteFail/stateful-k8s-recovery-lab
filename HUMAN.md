@@ -87,8 +87,6 @@ make port-forward-all
 make port-forward-stop
 ```
 
-```
-
 ### Verify Backup and Restore End to End
 
 `make restore-drill` runs a self-contained backup-and-restore cycle. It writes known keys to the app, takes a backup, overwrites those keys with different values, runs a full restore, and verifies that the original values are recovered. The command prints `PASSED` or `FAILED` at the end.
