@@ -45,7 +45,7 @@ The rest of this file explains what to run, what healthy looks like, and what ea
 
 ### Prequisites Verification and Installation
 **Required platform:** Linux. The scripts are written for bash on Linux. They are not tested on macOS or native Windows.
-> The repo wast tested on WSL2 Ubuntu 22.04
+> The repo was tested on WSL2 Ubuntu 22.04
 
 ```bash
 # Clone the repository and enter it.
