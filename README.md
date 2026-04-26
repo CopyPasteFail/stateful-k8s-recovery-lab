@@ -94,8 +94,6 @@ MinIO (in-cluster) is the Restic backend. Local demo credentials are in
 > LVM or CSI volume snapshot for crash-consistency.
 > See [docs/backup-restore.md](docs/backup-restore.md) for details.
 
-See [docs/backup-restore.md](docs/backup-restore.md) for the full operator procedure.
-
 ---
 
 ## Observability

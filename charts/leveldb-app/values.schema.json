@@ -6,6 +6,61 @@
       "type": "integer",
       "enum": [1],
       "description": "Number of replicas for the write StatefulSet. Must be 1. LevelDB holds an exclusive file lock on its data directory; a second writer process will fail or corrupt data. Horizontal scaling requires the shard-per-pod model (a separate StatefulSet per key range), not replica count > 1."
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ingress": {
+          "type": "object",
+          "properties": {
+            "allowSameNamespace": {
+              "type": "boolean"
+            },
+            "allowPrometheusNamespaceSelector": {
+              "type": "object"
+            },
+            "allowPrometheusPodSelector": {
+              "type": "object"
+            }
+          }
+        },
+        "egress": {
+          "type": "object",
+          "properties": {
+            "dns": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "objectStore": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "ipBlocks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

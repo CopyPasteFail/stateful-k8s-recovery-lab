@@ -43,7 +43,7 @@ The rest of this file explains what to run, what healthy looks like, and what ea
 
 ## Quick Setup and Teardown Flow
 
-### Prequisites Verification and Installation
+### Prerequisites Verification and Installation
 **Required platform:** Linux. The scripts are written for bash on Linux. They are not tested on macOS or native Windows.
 > The repo was tested on WSL2 Ubuntu 22.04
 
@@ -204,7 +204,7 @@ Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoff
 
 The app is a single-writer API-only LevelDB service exposed through a Kubernetes `StatefulSet`.
 
-The main demo flow deployes it and seeds sample data.
+The main demo flow deploys it and seeds sample data.
 When it is healthy, `leveldb-app-0` is running and ready, the health and readiness probes pass, and the metrics endpoint exposes the application counters and histograms.
 `http://localhost:18081/` returns a small JSON document that lists the useful API endpoints.
 

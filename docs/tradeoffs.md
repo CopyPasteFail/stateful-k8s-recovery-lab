@@ -126,7 +126,7 @@ For production:
 
 ## NetworkPolicies as production hardening {#networkpolicy}
 
-**Decision:** NetworkPolicies are not applied in the local POC but are specified as required for production.
+**Decision:** The chart ships an optional `NetworkPolicy` template, disabled by default. Local POC clusters (k3d without Calico or Cilium) do not enforce NetworkPolicy; enabling it there has no effect. Enable for production hardening.
 
 **Rationale:** k3d does not ship a NetworkPolicy controller by default. Applying NetworkPolicies without enforcement gives a false sense of security. In production (with a CNI that enforces NetworkPolicies, such as Calico or Cilium), apply:
 - `leveldb-system` pods: ingress from `observability` (Prometheus scrape) only; no egress except to MinIO
