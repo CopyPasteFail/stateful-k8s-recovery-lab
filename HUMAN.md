@@ -10,37 +10,6 @@ For deeper detail, see:
 
 ---
 
-## What This Guide Is For
-
-Use this repository when you want a realistic walkthrough of a stateful Kubernetes app with backup, restore, and observability wired together.
-
-The fastest complete path is `make demo-full`. It brings up the cluster, MinIO, the app, scheduled backups, Prometheus, Grafana, Loki, and the app monitoring integration.
-
-If you want the shorter path, use `make demo`. It covers the core app, MinIO, and backups, but skips the observability stack.
-
-The rest of this file explains what to run, what healthy looks like, and what each part is doing.
-
----
-
-## System coverage map
-
-| Operational concern | Where to look | Notes |
-|---|---|---|
-| Stateful workload deployment | `charts/leveldb-app/` | Helm chart defining the StatefulSet, PVC, and service |
-| Persistent storage | `charts/leveldb-app/`, [docs/architecture.md](docs/architecture.md) | PVC provisioning, storage class, and volume mount config |
-| Backup schedule and RPO | [docs/backup-restore.md](docs/backup-restore.md) | CronJob schedule; RPO target is six hours |
-| Restore procedure | [docs/backup-restore.md](docs/backup-restore.md) | Full restore walkthrough including failure-handling steps |
-| Backup consistency boundary | [docs/backup-restore.md](docs/backup-restore.md), [docs/tradeoffs.md](docs/tradeoffs.md), [docs/production-snapshots.md](docs/production-snapshots.md) | Live-PVC backup in local demo; production path requires CSI or LVM snapshots — see production-snapshots.md for concrete examples |
-| Scaling model | [docs/tradeoffs.md](docs/tradeoffs.md) | Single-writer LevelDB constraint; horizontal write scaling is not supported |
-| Migration and upgrades | [docs/migration.md](docs/migration.md) | Schema and version migration steps |
-| Monitoring and dashboards | [docs/observability.md](docs/observability.md) | Prometheus scrape config and Grafana dashboard definitions |
-| Alerting | [docs/observability.md](docs/observability.md) | PrometheusRule definitions and Alertmanager configuration |
-| Logs and troubleshooting | [docs/observability.md](docs/observability.md), `scripts/logs.sh` | Loki/Alloy pipeline; `make logs` for quick pod log access |
-| Security hardening | [docs/tradeoffs.md](docs/tradeoffs.md) | Local demo credential model and production secret management notes |
-| Local demo lifecycle | `Makefile`, `scripts/` | `make demo-full` to bring up, `make destroy` to tear down |
-
----
-
 ## Quick Setup and Teardown Flow
 
 ### Prerequisites Verification and Installation
@@ -289,6 +258,25 @@ Read more in [docs/tradeoffs.md](docs/tradeoffs.md).
 - NetworkPolicy is present as a production-readiness example, not as a dependency of the local demo. k3d/k3s may enforce NetworkPolicy depending on networking configuration, but the POC avoids relying on environment-specific policy behavior.
 
 Read more in [docs/backup-restore.md](docs/backup-restore.md) and [docs/tradeoffs.md](docs/tradeoffs.md).
+
+---
+
+## System coverage map
+
+| Operational concern | Where to look | Notes |
+|---|---|---|
+| Stateful workload deployment | `charts/leveldb-app/` | Helm chart defining the StatefulSet, PVC, and service |
+| Persistent storage | `charts/leveldb-app/`, [docs/architecture.md](docs/architecture.md) | PVC provisioning, storage class, and volume mount config |
+| Backup schedule and RPO | [docs/backup-restore.md](docs/backup-restore.md) | CronJob schedule; RPO target is six hours |
+| Restore procedure | [docs/backup-restore.md](docs/backup-restore.md) | Full restore walkthrough including failure-handling steps |
+| Backup consistency boundary | [docs/backup-restore.md](docs/backup-restore.md), [docs/tradeoffs.md](docs/tradeoffs.md), [docs/production-snapshots.md](docs/production-snapshots.md) | Live-PVC backup in local demo; production path requires CSI or LVM snapshots — see production-snapshots.md for concrete examples |
+| Scaling model | [docs/tradeoffs.md](docs/tradeoffs.md) | Single-writer LevelDB constraint; horizontal write scaling is not supported |
+| Migration and upgrades | [docs/migration.md](docs/migration.md) | Schema and version migration steps |
+| Monitoring and dashboards | [docs/observability.md](docs/observability.md) | Prometheus scrape config and Grafana dashboard definitions |
+| Alerting | [docs/observability.md](docs/observability.md) | PrometheusRule definitions and Alertmanager configuration |
+| Logs and troubleshooting | [docs/observability.md](docs/observability.md), `scripts/logs.sh` | Loki/Alloy pipeline; `make logs` for quick pod log access |
+| Security hardening | [docs/tradeoffs.md](docs/tradeoffs.md) | Local demo credential model and production secret management notes |
+| Local demo lifecycle | `Makefile`, `scripts/` | `make demo-full` to bring up, `make destroy` to tear down |
 
 ---
 
