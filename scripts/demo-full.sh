@@ -11,8 +11,8 @@
 # Grafana, Loki, and Alloy. Subsequent runs are faster (images cached).
 #
 # Restore is intentionally excluded: it is a disruptive recovery operation
-# that does not belong in an automated demo. To validate the restore path:
-#   make restore
+# that does not belong in an automated demo. To validate the restore path end to end:
+#   make restore-drill
 #
 # Usage:
 #   make demo-full
@@ -98,6 +98,6 @@ printf '%s\n' \
     '  Access MinIO:' \
     '    make port-forward TARGET=minio-console  # http://localhost:9001' \
     '' \
-    '  Validate the restore path (disruptive — scales app to 0):' \
-    '    make restore' \
+    '  Validate the restore path end to end (disruptive — scales app to 0):' \
+    '    make restore-drill' \
     ''

@@ -12,9 +12,8 @@
 #
 # Restore is intentionally excluded: it is a disruptive recovery operation
 # (scales the app down, overwrites PVC data) that does not belong in an
-# automated demo. To validate the restore path run:
-#   make backup       # ensure a snapshot exists
-#   make restore      # guided restore: scale-down → restore → scale-up
+# automated demo. To validate the restore path end to end run:
+#   make restore-drill  # write keys → backup → dirty overwrite → restore → verify
 #
 # Usage:
 #   make demo
@@ -92,8 +91,8 @@ printf '%s\n' \
     '  Access MinIO:' \
     '    make port-forward TARGET=minio-console  # http://localhost:9001' \
     '' \
-    '  Validate the restore path (disruptive — scales app to 0):' \
-    '    make restore' \
+    '  Validate the restore path end to end (disruptive — scales app to 0):' \
+    '    make restore-drill' \
     '' \
     '  Deploy observability and see the full platform:' \
     '    make demo-full' \
