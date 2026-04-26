@@ -2,12 +2,6 @@
 
 This guide is for a human operator who wants to bring the system up, prove that it works, inspect the moving parts, and cleanly remove the local cluster afterward.
 
-For deeper detail, see:
-- [docs/architecture.md](docs/architecture.md)
-- [docs/backup-restore.md](docs/backup-restore.md)
-- [docs/observability.md](docs/observability.md)
-- [docs/tradeoffs.md](docs/tradeoffs.md)
-
 ---
 
 ## Quick Setup and Teardown Flow
